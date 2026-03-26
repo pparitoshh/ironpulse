@@ -129,7 +129,7 @@ export default function WorkoutPage() {
     setSaved(true)
 
     // Fetch progressive overload suggestions for next session
-    const exerciseNames = [...new Set(sets.map(s => s.exercise_name))]
+    const exerciseNames = Array.from(new Set(sets.map(s => s.exercise_name)))
     const tips: Record<string, any> = {}
     await Promise.all(exerciseNames.map(async (name) => {
       const exSets = sets.filter(s => s.exercise_name === name).map(s => ({ weight_kg: s.weight_kg, reps: s.reps }))
