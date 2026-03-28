@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { BottomNav } from '@/components/ui/BottomNav'
+import { MUSCLE_GROUPS } from '@/types'
 
 async function fetchOverloadSuggestion(exerciseName: string, sets: {weight_kg: number, reps: number}[]) {
   if (sets.length < 2) return null
@@ -31,6 +32,11 @@ export default function WorkoutPage() {
   const [overloadTips, setOverloadTips] = useState<Record<string, any>>({})
   const [startTime] = useState(Date.now())
   const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const [editMode, setEditMode] = useState(false)
+  const [showAddExercise, setShowAddExercise] = useState(false)
+  const [newExercise, setNewExercise] = useState({
+    name: '', muscle_group: 'chest', sets: 3, reps: '10', rest_seconds: 90, equipment: '', notes: '', youtube_url: ''
+  })
 
   const today = new Date().toISOString().slice(0, 10)
   const dayName = new Date().toLocaleDateString('en-US', { weekday: 'long' })
@@ -139,6 +145,81 @@ export default function WorkoutPage() {
     setOverloadTips(tips)
   }
 
+  async function savePlanToServer(updatedPlan: any) {
+    await fetch('/api/generate-plan', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan: updatedPlan }),
+    })
+  }
+
+  function removeExercise(exerciseId: string) {
+    if (!plan || !selectedDay) return
+    const updatedDays = plan.days.map((d: any) => {
+      if (d.day !== selectedDay.day) return d
+      return { ...d, exercises: d.exercises.filter((e: any) => e.id !== exerciseId) }
+    })
+    const updatedPlan = { ...plan, days: updatedDays }
+    setPlan(updatedPlan)
+    setSelectedDay(updatedDays.find((d: any) => d.day === selectedDay.day))
+    // Remove any logged sets for this exercise
+    setSets(prev => prev.filter(s => s.exercise_id !== exerciseId))
+    savePlanToServer(updatedPlan)
+  }
+
+  function addExercise() {
+    if (!plan || !selectedDay || !newExercise.name.trim()) return
+    const id = `ex_custom_${Date.now()}_${newExercise.name.toLowerCase().replace(/\s+/g, '_')}`
+    const exercise = { id, ...newExercise, sets: Number(newExercise.sets), rest_seconds: Number(newExercise.rest_seconds) }
+    const updatedDays = plan.days.map((d: any) => {
+      if (d.day !== selectedDay.day) return d
+      return { ...d, exercises: [...d.exercises, exercise] }
+    })
+    const updatedPlan = { ...plan, days: updatedDays }
+    setPlan(updatedPlan)
+    setSelectedDay(updatedDays.find((d: any) => d.day === selectedDay.day))
+    setShowAddExercise(false)
+    setNewExercise({ name: '', muscle_group: 'chest', sets: 3, reps: '10', rest_seconds: 90, equipment: '', notes: '', youtube_url: '' })
+    savePlanToServer(updatedPlan)
+  }
+
+  function updateExerciseField(exerciseId: string, field: string, value: any) {
+    if (!plan || !selectedDay) return
+    const updatedDays = plan.days.map((d: any) => {
+      if (d.day !== selectedDay.day) return d
+      return {
+        ...d,
+        exercises: d.exercises.map((e: any) => e.id === exerciseId ? { ...e, [field]: value } : e),
+      }
+    })
+    const updatedPlan = { ...plan, days: updatedDays }
+    setPlan(updatedPlan)
+    setSelectedDay(updatedDays.find((d: any) => d.day === selectedDay.day))
+  }
+
+  function saveExerciseEdits() {
+    if (!plan) return
+    savePlanToServer(plan)
+  }
+
+  function moveExercise(exerciseId: string, direction: 'up' | 'down') {
+    if (!plan || !selectedDay) return
+    const updatedDays = plan.days.map((d: any) => {
+      if (d.day !== selectedDay.day) return d
+      const exercises = [...d.exercises]
+      const idx = exercises.findIndex((e: any) => e.id === exerciseId)
+      if (idx < 0) return d
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+      if (swapIdx < 0 || swapIdx >= exercises.length) return d
+      ;[exercises[idx], exercises[swapIdx]] = [exercises[swapIdx], exercises[idx]]
+      return { ...d, exercises }
+    })
+    const updatedPlan = { ...plan, days: updatedDays }
+    setPlan(updatedPlan)
+    setSelectedDay(updatedDays.find((d: any) => d.day === selectedDay.day))
+    savePlanToServer(updatedPlan)
+  }
+
   const exerciseSets = (exerciseId: string) => sets.filter(s => s.exercise_id === exerciseId)
 
   const circumference = 2 * Math.PI * 40
@@ -147,10 +228,24 @@ export default function WorkoutPage() {
   return (
     <div className="min-h-screen pb-24" style={{ background: '#080810' }}>
       {/* Header */}
-      <div className="px-5 pt-12 pb-4">
-        <p className="text-xs uppercase tracking-widest mb-1" style={{ color: '#888' }}>Today</p>
-        <h1 className="font-bold text-2xl">{selectedDay?.name || 'Workout'}</h1>
-        {selectedDay && <p className="text-sm mt-0.5" style={{ color: '#f97316' }}>{selectedDay.focus}</p>}
+      <div className="px-5 pt-12 pb-4 flex items-start justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-widest mb-1" style={{ color: '#888' }}>Today</p>
+          <h1 className="font-bold text-2xl">{selectedDay?.name || 'Workout'}</h1>
+          {selectedDay && <p className="text-sm mt-0.5" style={{ color: '#f97316' }}>{selectedDay.focus}</p>}
+        </div>
+        {selectedDay && (
+          <button
+            onClick={() => setEditMode(prev => !prev)}
+            className="mt-1 px-3 py-1.5 rounded-xl text-xs font-medium transition-all"
+            style={{
+              background: editMode ? 'rgba(249,115,22,0.15)' : '#0f0f1a',
+              border: `1px solid ${editMode ? '#f97316' : '#1c1c2e'}`,
+              color: editMode ? '#f97316' : '#888',
+            }}>
+            {editMode ? 'Done Editing' : 'Edit Plan'}
+          </button>
+        )}
       </div>
 
       {/* Rest Timer */}
@@ -208,25 +303,124 @@ export default function WorkoutPage() {
             <div key={exercise.id} className="rounded-2xl overflow-hidden"
               style={{ background: '#0f0f1a', border: `1px solid ${isActive ? '#f97316' : '#1c1c2e'}` }}>
               {/* Exercise header */}
-              <div className="px-4 pt-3 pb-2 flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold">{exercise.name}</h3>
-                    {hasPR && <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">🏆 PR!</span>}
+              <div className="px-4 pt-3 pb-2">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      {editMode ? (
+                        <input
+                          type="text"
+                          value={exercise.name}
+                          onChange={e => updateExerciseField(exercise.id, 'name', e.target.value)}
+                          onBlur={saveExerciseEdits}
+                          className="font-semibold bg-transparent outline-none border-b w-full"
+                          style={{ borderColor: '#f97316', color: '#f0f0f0' }}
+                        />
+                      ) : (
+                        <h3 className="font-semibold">{exercise.name}</h3>
+                      )}
+                      {hasPR && <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 flex-shrink-0">🏆 PR!</span>}
+                    </div>
+                    {!editMode && (
+                      <div className="flex items-center gap-3 mt-0.5">
+                        <span className="text-xs capitalize px-2 py-0.5 rounded-lg" style={{ background: '#14141f', color: '#888' }}>
+                          {exercise.muscle_group}
+                        </span>
+                        <span className="text-xs" style={{ color: '#888' }}>
+                          {exercise.sets}×{exercise.reps} · {exercise.rest_seconds}s rest
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-3 mt-0.5">
-                    <span className="text-xs capitalize px-2 py-0.5 rounded-lg" style={{ background: '#14141f', color: '#888' }}>
-                      {exercise.muscle_group}
-                    </span>
-                    <span className="text-xs" style={{ color: '#888' }}>
-                      {exercise.sets}×{exercise.reps} · {exercise.rest_seconds}s rest
-                    </span>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {editMode ? (
+                      <>
+                        <button onClick={() => moveExercise(exercise.id, 'up')} className="text-xs px-2 py-1 rounded-lg"
+                          style={{ background: '#14141f', color: '#888' }}>↑</button>
+                        <button onClick={() => moveExercise(exercise.id, 'down')} className="text-xs px-2 py-1 rounded-lg"
+                          style={{ background: '#14141f', color: '#888' }}>↓</button>
+                        <button onClick={() => removeExercise(exercise.id)} className="text-xs px-2 py-1 rounded-lg"
+                          style={{ background: 'rgba(239,68,68,0.15)', color: '#ef4444' }}>Remove</button>
+                      </>
+                    ) : (
+                      <button onClick={() => startRest(exercise.rest_seconds)}
+                        className="text-xs px-2 py-1 rounded-lg" style={{ background: '#14141f', color: '#888' }}>
+                        ⏱ Timer
+                      </button>
+                    )}
                   </div>
                 </div>
-                <button onClick={() => startRest(exercise.rest_seconds)}
-                  className="text-xs px-2 py-1 rounded-lg" style={{ background: '#14141f', color: '#888' }}>
-                  ⏱ Timer
-                </button>
+
+                {/* Edit mode: inline fields for muscle group, sets, reps, rest */}
+                {editMode && (
+                  <>
+                    <div className="grid grid-cols-4 gap-2 mt-2">
+                      <div>
+                        <label className="text-xs block mb-0.5" style={{ color: '#555' }}>Muscle</label>
+                        <select
+                          value={exercise.muscle_group}
+                          onChange={e => { updateExerciseField(exercise.id, 'muscle_group', e.target.value); saveExerciseEdits() }}
+                          className="w-full rounded-lg px-2 py-1.5 text-xs outline-none capitalize"
+                          style={{ background: '#14141f', border: '1px solid #1c1c2e', color: '#f0f0f0' }}>
+                          {MUSCLE_GROUPS.map(mg => (
+                            <option key={mg} value={mg}>{mg}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs block mb-0.5" style={{ color: '#555' }}>Sets</label>
+                        <input type="number" value={exercise.sets} min={1} max={20}
+                          onChange={e => updateExerciseField(exercise.id, 'sets', parseInt(e.target.value) || 1)}
+                          onBlur={saveExerciseEdits}
+                          className="w-full rounded-lg px-2 py-1.5 text-xs text-center outline-none"
+                          style={{ background: '#14141f', border: '1px solid #1c1c2e', color: '#f0f0f0' }} />
+                      </div>
+                      <div>
+                        <label className="text-xs block mb-0.5" style={{ color: '#555' }}>Reps</label>
+                        <input type="text" value={exercise.reps}
+                          onChange={e => updateExerciseField(exercise.id, 'reps', e.target.value)}
+                          onBlur={saveExerciseEdits}
+                          className="w-full rounded-lg px-2 py-1.5 text-xs text-center outline-none"
+                          style={{ background: '#14141f', border: '1px solid #1c1c2e', color: '#f0f0f0' }} />
+                      </div>
+                      <div>
+                        <label className="text-xs block mb-0.5" style={{ color: '#555' }}>Rest(s)</label>
+                        <input type="number" value={exercise.rest_seconds} min={0} step={15}
+                          onChange={e => updateExerciseField(exercise.id, 'rest_seconds', parseInt(e.target.value) || 0)}
+                          onBlur={saveExerciseEdits}
+                          className="w-full rounded-lg px-2 py-1.5 text-xs text-center outline-none"
+                          style={{ background: '#14141f', border: '1px solid #1c1c2e', color: '#f0f0f0' }} />
+                      </div>
+                    </div>
+                    <div className="mt-2">
+                      <label className="text-xs block mb-0.5" style={{ color: '#555' }}>YouTube Link</label>
+                      <input
+                        type="url"
+                        placeholder="https://youtube.com/watch?v=..."
+                        value={exercise.youtube_url || ''}
+                        onChange={e => updateExerciseField(exercise.id, 'youtube_url', e.target.value)}
+                        onBlur={saveExerciseEdits}
+                        className="w-full rounded-lg px-2 py-1.5 text-xs outline-none"
+                        style={{ background: '#14141f', border: '1px solid #1c1c2e', color: '#f0f0f0' }}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {/* YouTube link in normal mode */}
+                {!editMode && exercise.youtube_url && (
+                  <div className="mt-1">
+                    <a
+                      href={exercise.youtube_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition-all"
+                      style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.2a3 3 0 00-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 00.5 6.2 31.5 31.5 0 000 12a31.5 31.5 0 00.5 5.8 3 3 0 002.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 002.1-2.1A31.5 31.5 0 0024 12a31.5 31.5 0 00-.5-5.8zM9.6 15.6V8.4l6.3 3.6-6.3 3.6z"/></svg>
+                      Watch Form
+                    </a>
+                  </div>
+                )}
               </div>
 
               {/* Sets */}
@@ -277,6 +471,96 @@ export default function WorkoutPage() {
             </div>
           )
         })}
+
+        {/* Add Exercise (edit mode) */}
+        {editMode && selectedDay && !showAddExercise && (
+          <button onClick={() => setShowAddExercise(true)}
+            className="w-full py-3 rounded-2xl text-sm font-medium transition-all"
+            style={{ background: 'rgba(249,115,22,0.08)', color: '#f97316', border: '1px dashed rgba(249,115,22,0.3)' }}>
+            + Add Exercise
+          </button>
+        )}
+
+        {/* Add Exercise Form */}
+        {editMode && showAddExercise && (
+          <div className="rounded-2xl p-4 space-y-3" style={{ background: '#0f0f1a', border: '1px solid #f97316' }}>
+            <p className="text-xs uppercase tracking-widest" style={{ color: '#f97316' }}>New Exercise</p>
+            <input
+              type="text"
+              placeholder="Exercise name"
+              value={newExercise.name}
+              onChange={e => setNewExercise(prev => ({ ...prev, name: e.target.value }))}
+              className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+              style={{ background: '#14141f', border: '1px solid #1c1c2e', color: '#f0f0f0' }}
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs block mb-0.5" style={{ color: '#555' }}>Muscle Group</label>
+                <select
+                  value={newExercise.muscle_group}
+                  onChange={e => setNewExercise(prev => ({ ...prev, muscle_group: e.target.value }))}
+                  className="w-full rounded-lg px-2 py-2 text-sm outline-none capitalize"
+                  style={{ background: '#14141f', border: '1px solid #1c1c2e', color: '#f0f0f0' }}>
+                  {MUSCLE_GROUPS.map(mg => (
+                    <option key={mg} value={mg}>{mg}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs block mb-0.5" style={{ color: '#555' }}>Equipment</label>
+                <input type="text" placeholder="e.g. Barbell"
+                  value={newExercise.equipment}
+                  onChange={e => setNewExercise(prev => ({ ...prev, equipment: e.target.value }))}
+                  className="w-full rounded-lg px-2 py-2 text-sm outline-none"
+                  style={{ background: '#14141f', border: '1px solid #1c1c2e', color: '#f0f0f0' }} />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs block mb-0.5" style={{ color: '#555' }}>YouTube Link</label>
+              <input type="url" placeholder="https://youtube.com/watch?v=..."
+                value={newExercise.youtube_url}
+                onChange={e => setNewExercise(prev => ({ ...prev, youtube_url: e.target.value }))}
+                className="w-full rounded-lg px-2 py-2 text-sm outline-none"
+                style={{ background: '#14141f', border: '1px solid #1c1c2e', color: '#f0f0f0' }} />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="text-xs block mb-0.5" style={{ color: '#555' }}>Sets</label>
+                <input type="number" value={newExercise.sets} min={1}
+                  onChange={e => setNewExercise(prev => ({ ...prev, sets: parseInt(e.target.value) || 1 }))}
+                  className="w-full rounded-lg px-2 py-2 text-sm text-center outline-none"
+                  style={{ background: '#14141f', border: '1px solid #1c1c2e', color: '#f0f0f0' }} />
+              </div>
+              <div>
+                <label className="text-xs block mb-0.5" style={{ color: '#555' }}>Reps</label>
+                <input type="text" value={newExercise.reps}
+                  onChange={e => setNewExercise(prev => ({ ...prev, reps: e.target.value }))}
+                  className="w-full rounded-lg px-2 py-2 text-sm text-center outline-none"
+                  style={{ background: '#14141f', border: '1px solid #1c1c2e', color: '#f0f0f0' }} />
+              </div>
+              <div>
+                <label className="text-xs block mb-0.5" style={{ color: '#555' }}>Rest (s)</label>
+                <input type="number" value={newExercise.rest_seconds} min={0} step={15}
+                  onChange={e => setNewExercise(prev => ({ ...prev, rest_seconds: parseInt(e.target.value) || 0 }))}
+                  className="w-full rounded-lg px-2 py-2 text-sm text-center outline-none"
+                  style={{ background: '#14141f', border: '1px solid #1c1c2e', color: '#f0f0f0' }} />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={addExercise}
+                disabled={!newExercise.name.trim()}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-40"
+                style={{ background: '#f97316', color: '#fff' }}>
+                Add
+              </button>
+              <button onClick={() => setShowAddExercise(false)}
+                className="px-4 py-2.5 rounded-xl text-sm"
+                style={{ background: '#14141f', color: '#888' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Save button */}
         {sets.length > 0 && (

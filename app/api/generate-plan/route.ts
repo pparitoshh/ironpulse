@@ -32,6 +32,48 @@ export async function POST(req: NextRequest) {
   }
 }
 
+export async function PUT(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await req.json()
+    const { plan } = body
+
+    if (!plan) {
+      return NextResponse.json({ error: 'Plan is required' }, { status: 400 })
+    }
+
+    const supabase = getServiceClient()
+    const userId = (session.user as any).id || session.user.email
+
+    // Get the most recent plan and update it
+    const { data: existing } = await supabase
+      .from('workout_plans')
+      .select('id')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (!existing) {
+      return NextResponse.json({ error: 'No plan found' }, { status: 404 })
+    }
+
+    await supabase
+      .from('workout_plans')
+      .update({ plan })
+      .eq('id', existing.id)
+
+    return NextResponse.json({ plan })
+  } catch (error) {
+    console.error('Update plan error:', error)
+    return NextResponse.json({ error: 'Failed to update plan' }, { status: 500 })
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)

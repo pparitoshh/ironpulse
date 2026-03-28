@@ -49,6 +49,7 @@ export interface Exercise {
   rest_seconds: number
   notes?: string
   equipment?: string
+  youtube_url?: string
 }
 
 export interface WorkoutLog {
