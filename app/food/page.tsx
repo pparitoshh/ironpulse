@@ -27,6 +27,7 @@ export default function FoodPage() {
   const [tab, setTab] = useState<'text' | 'photo' | 'manual'>('text')
   const [manual, setManual] = useState({ food_name: '', calories: '', protein_g: '', carbs_g: '', fat_g: '', quantity: '' })
   const fileRef = useRef<HTMLInputElement>(null)
+  const galleryRef = useRef<HTMLInputElement>(null)
 
   const today = new Date().toISOString().slice(0, 10)
 
@@ -310,22 +311,31 @@ export default function FoodPage() {
                 <div>
                   <input ref={fileRef} type="file" accept="image/*" capture="environment"
                     className="hidden" onChange={scanPhoto} />
-                  <button onClick={() => fileRef.current?.click()} disabled={aiLoading}
-                    className="w-full py-8 rounded-xl border-2 border-dashed text-center disabled:opacity-50"
-                    style={{ borderColor: '#1c1c2e', color: '#888' }}>
-                    {aiLoading ? (
-                      <div>
-                        <div className="w-8 h-8 rounded-full border-2 border-orange-500 border-t-transparent animate-spin mx-auto mb-2" />
-                        <div className="text-sm">Scanning with Gemini...</div>
-                      </div>
-                    ) : (
-                      <div>
-                        <div className="text-4xl mb-2">📷</div>
-                        <div className="text-sm">Take photo or upload</div>
-                        <div className="text-xs mt-1" style={{ color: '#555' }}>Gemini AI will estimate macros</div>
-                      </div>
-                    )}
-                  </button>
+                  <input ref={galleryRef} type="file" accept="image/*"
+                    className="hidden" onChange={scanPhoto} />
+                  {aiLoading ? (
+                    <div className="w-full py-8 rounded-xl border-2 border-dashed text-center"
+                      style={{ borderColor: '#1c1c2e', color: '#888' }}>
+                      <div className="w-8 h-8 rounded-full border-2 border-orange-500 border-t-transparent animate-spin mx-auto mb-2" />
+                      <div className="text-sm">Scanning with AI...</div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      <button onClick={() => fileRef.current?.click()} disabled={aiLoading}
+                        className="py-6 rounded-xl border-2 border-dashed text-center disabled:opacity-50"
+                        style={{ borderColor: '#1c1c2e', color: '#888' }}>
+                        <div className="text-3xl mb-1">📷</div>
+                        <div className="text-sm">Take Photo</div>
+                      </button>
+                      <button onClick={() => galleryRef.current?.click()} disabled={aiLoading}
+                        className="py-6 rounded-xl border-2 border-dashed text-center disabled:opacity-50"
+                        style={{ borderColor: '#1c1c2e', color: '#888' }}>
+                        <div className="text-3xl mb-1">🖼️</div>
+                        <div className="text-sm">From Gallery</div>
+                      </button>
+                    </div>
+                  )}
+                  <div className="text-xs text-center mt-2" style={{ color: '#555' }}>AI will estimate macros from the image</div>
                 </div>
               )}
 
