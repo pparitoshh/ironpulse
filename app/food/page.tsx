@@ -61,25 +61,44 @@ export default function FoodPage() {
     finally { setAiLoading(false) }
   }
 
+  function compressImage(file: File, maxWidth = 800, quality = 0.7): Promise<{ base64: string; mimeType: string }> {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        let { width, height } = img
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width)
+          width = maxWidth
+        }
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')!
+        ctx.drawImage(img, 0, 0, width, height)
+        const dataUrl = canvas.toDataURL('image/jpeg', quality)
+        resolve({ base64: dataUrl.split(',')[1], mimeType: 'image/jpeg' })
+      }
+      img.onerror = reject
+      img.src = URL.createObjectURL(file)
+    })
+  }
+
   async function scanPhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setAiLoading(true)
     try {
-      const reader = new FileReader()
-      reader.onload = async () => {
-        const base64 = (reader.result as string).split(',')[1]
-        const res = await fetch('/api/scan-food', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ base64Image: base64, mimeType: file.type }),
-        })
-        const data = await res.json()
-        setPreview(data)
-        setAiLoading(false)
-      }
-      reader.readAsDataURL(file)
-    } catch (e) { setAiLoading(false) }
+      const { base64, mimeType } = await compressImage(file)
+      const res = await fetch('/api/scan-food', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64Image: base64, mimeType }),
+      })
+      if (!res.ok) throw new Error('Scan failed')
+      const data = await res.json()
+      setPreview(data)
+    } catch (err) { console.error('Photo scan error:', err) }
+    finally { setAiLoading(false) }
   }
 
   async function logFood(data: any) {

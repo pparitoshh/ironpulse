@@ -1,12 +1,22 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+import { groq } from './groq'
 
 export async function scanFoodImage(base64Image: string, mimeType: string) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+  const dataUrl = `data:${mimeType};base64,${base64Image}`
 
-  const prompt = `Analyze this food image and estimate the nutritional content.
-  
+  const response = await groq.chat.completions.create({
+    model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+    messages: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'image_url',
+            image_url: { url: dataUrl },
+          },
+          {
+            type: 'text',
+            text: `Analyze this food image and estimate the nutritional content.
+
 Return ONLY valid JSON with no markdown:
 {
   "food_name": "descriptive name of what you see",
@@ -18,19 +28,16 @@ Return ONLY valid JSON with no markdown:
   "items_detected": ["item1", "item2"]
 }
 
-Be as accurate as possible based on visible portion sizes.`
-
-  const result = await model.generateContent([
-    {
-      inlineData: {
-        data: base64Image,
-        mimeType: mimeType as 'image/jpeg' | 'image/png' | 'image/webp',
+Be as accurate as possible based on visible portion sizes.`,
+          },
+        ],
       },
-    },
-    prompt,
-  ])
+    ],
+    temperature: 0.3,
+    max_tokens: 512,
+  })
 
-  const text = result.response.text()
+  const text = response.choices[0]?.message?.content || ''
   const clean = text.replace(/```json|```/g, '').trim()
   return JSON.parse(clean)
 }
