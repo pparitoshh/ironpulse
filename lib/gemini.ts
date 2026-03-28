@@ -3,7 +3,7 @@ import { groq } from './groq'
 export async function scanFoodImage(base64Image: string, mimeType: string) {
   const dataUrl = `data:${mimeType};base64,${base64Image}`
 
-  const response = await groq.chat.completions.create({
+  const response = await (groq.chat.completions.create as any)({
     model: 'meta-llama/llama-4-scout-17b-16e-instruct',
     messages: [
       {
