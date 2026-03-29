@@ -81,7 +81,31 @@ Return ONLY valid JSON in this exact format:
 }
 
 export async function estimateMacros(description: string) {
-  const prompt = `Estimate the nutritional content of this food: "${description}"
+  const prompt = `You are a precise nutrition analyst. Estimate macros accurately for: "${description}"
+
+STEP 1 - IDENTIFY all food items:
+- List every ingredient separately
+- Identify cooking method (fried, boiled, grilled, air-fried)
+- Estimate portion size (small/medium/large)
+
+STEP 2 - ESTIMATE portions:
+- Estimate weight in grams per item
+- A fist = ~150g carbs, palm = ~120g protein, thumb = ~15g fat
+
+STEP 3 - CRITICAL: Always account for hidden calories:
+- Cooking oil: +150-200 kcal per dish unless stated otherwise
+- Sauces/marinades: +50-100 kcal
+- If stir-fried: assume 1-2 tbsp oil used
+
+STEP 4 - Calculate using USDA standards per 100g:
+- Identify each ingredient
+- Apply portion weight
+- Sum all items
+
+ACCURACY RULES:
+- Never underestimate oil/fat from cooking
+- Mixed dishes → estimate conservatively high
+- If uncertain about portion → use the higher estimate
 
 Return ONLY valid JSON:
 {
@@ -90,10 +114,12 @@ Return ONLY valid JSON:
   "protein_g": 25,
   "carbs_g": 40,
   "fat_g": 8,
-  "quantity": "1 serving (approximately 200g)"
-}
-
-Be realistic and accurate. If multiple items, sum them up.`
+  "quantity": "1 serving (approximately 200g)",
+  "items_breakdown": [
+    {"item": "item name", "weight_g": 150, "calories": 200, "protein_g": 15, "carbs_g": 20, "fat_g": 5}
+  ],
+  "notes": "any flags about hidden calories"
+}`
 
   const completion = await groq.chat.completions.create({
     messages: [{ role: 'user', content: prompt }],

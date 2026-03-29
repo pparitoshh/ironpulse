@@ -32,8 +32,12 @@ export default function WorkoutPage() {
   const [overloadTips, setOverloadTips] = useState<Record<string, any>>({})
   const [startTime] = useState(Date.now())
   const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const autoSaveRef = useRef<NodeJS.Timeout | null>(null)
+  const [autoSaving, setAutoSaving] = useState(false)
   const [editMode, setEditMode] = useState(false)
   const [showAddExercise, setShowAddExercise] = useState(false)
+  const [movingExercise, setMovingExercise] = useState<string | null>(null)
+  const [renamingDay, setRenamingDay] = useState<string | null>(null)
   const [newExercise, setNewExercise] = useState({
     name: '', muscle_group: 'chest', sets: 3, reps: '10', rest_seconds: 90, equipment: '', notes: '', youtube_url: ''
   })
@@ -52,6 +56,33 @@ export default function WorkoutPage() {
     timerRef.current = setTimeout(() => setRestTimer(t => (t ?? 0) - 1), 1000)
     return () => { if (timerRef.current) clearTimeout(timerRef.current) }
   }, [restTimer])
+
+  // Auto-save sets after changes (debounced 1.5s)
+  const setsLoaded = useRef(false)
+  useEffect(() => {
+    if (!setsLoaded.current) {
+      setsLoaded.current = sets.length > 0
+      return
+    }
+    if (sets.length === 0) return
+    if (autoSaveRef.current) clearTimeout(autoSaveRef.current)
+    autoSaveRef.current = setTimeout(async () => {
+      setAutoSaving(true)
+      const duration = Math.round((Date.now() - startTime) / 60000)
+      await fetch('/api/log-workout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: today,
+          day_name: selectedDay?.name || dayName,
+          sets,
+          duration_minutes: duration,
+        }),
+      })
+      setAutoSaving(false)
+    }, 1500)
+    return () => { if (autoSaveRef.current) clearTimeout(autoSaveRef.current) }
+  }, [sets])
 
   async function loadData() {
     const [planRes, logRes, histRes] = await Promise.all([
@@ -202,6 +233,67 @@ export default function WorkoutPage() {
     savePlanToServer(plan)
   }
 
+  function moveExerciseToDay(exerciseId: string, targetDayName: string) {
+    if (!plan || !selectedDay || targetDayName === selectedDay.day) return
+    const exercise = selectedDay.exercises.find((e: any) => e.id === exerciseId)
+    if (!exercise) return
+    const updatedDays = plan.days.map((d: any) => {
+      if (d.day === selectedDay.day) {
+        return { ...d, exercises: d.exercises.filter((e: any) => e.id !== exerciseId) }
+      }
+      if (d.day === targetDayName) {
+        return { ...d, exercises: [...d.exercises, exercise] }
+      }
+      return d
+    })
+    const updatedPlan = { ...plan, days: updatedDays }
+    setPlan(updatedPlan)
+    setSelectedDay(updatedDays.find((d: any) => d.day === selectedDay.day))
+    setSets(prev => prev.filter(s => s.exercise_id !== exerciseId))
+    setMovingExercise(null)
+    savePlanToServer(updatedPlan)
+  }
+
+  const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+  function deleteDay(dayName: string) {
+    if (!plan) return
+    const updatedDays = plan.days.filter((d: any) => d.day !== dayName)
+    const updatedPlan = { ...plan, days: updatedDays }
+    setPlan(updatedPlan)
+    if (selectedDay?.day === dayName) {
+      setSelectedDay(updatedDays[0] || null)
+    }
+    setSets([])
+    savePlanToServer(updatedPlan)
+  }
+
+  function addDay() {
+    if (!plan) return
+    const usedDays = plan.days.map((d: any) => d.day)
+    const nextDay = WEEKDAYS.find(wd => !usedDays.includes(wd))
+    if (!nextDay) return // all 7 days already used
+    const newDay = { day: nextDay, name: 'New Workout', focus: '', exercises: [] }
+    const updatedPlan = { ...plan, days: [...plan.days, newDay] }
+    setPlan(updatedPlan)
+    setSelectedDay(newDay)
+    savePlanToServer(updatedPlan)
+  }
+
+  function renameDay(oldDayName: string, newDayName: string) {
+    if (!plan || oldDayName === newDayName) return
+    const updatedDays = plan.days.map((d: any) =>
+      d.day === oldDayName ? { ...d, day: newDayName } : d
+    )
+    const updatedPlan = { ...plan, days: updatedDays }
+    setPlan(updatedPlan)
+    if (selectedDay?.day === oldDayName) {
+      setSelectedDay(updatedDays.find((d: any) => d.day === newDayName))
+    }
+    setRenamingDay(null)
+    savePlanToServer(updatedPlan)
+  }
+
   function moveExercise(exerciseId: string, direction: 'up' | 'down') {
     if (!plan || !selectedDay) return
     const updatedDays = plan.days.map((d: any) => {
@@ -230,7 +322,15 @@ export default function WorkoutPage() {
       {/* Header */}
       <div className="px-5 pt-12 pb-4 flex items-start justify-between">
         <div>
-          <p className="text-xs uppercase tracking-widest mb-1" style={{ color: '#888' }}>Today</p>
+          <div className="flex items-center gap-2 mb-1">
+            <p className="text-xs uppercase tracking-widest" style={{ color: '#888' }}>Today</p>
+            {autoSaving && (
+              <span className="flex items-center gap-1 text-xs" style={{ color: '#f97316' }}>
+                <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                Saving...
+              </span>
+            )}
+          </div>
           <h1 className="font-bold text-2xl">{selectedDay?.name || 'Workout'}</h1>
           {selectedDay && <p className="text-sm mt-0.5" style={{ color: '#f97316' }}>{selectedDay.focus}</p>}
         </div>
@@ -276,20 +376,104 @@ export default function WorkoutPage() {
 
       {/* Day selector */}
       {plan?.days && (
-        <div className="px-5 mb-4 overflow-x-auto">
-          <div className="flex gap-2 w-max">
-            {plan.days.map((d: any) => (
-              <button key={d.day} onClick={() => setSelectedDay(d)}
-                className="px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all"
-                style={{
-                  background: selectedDay?.day === d.day ? 'rgba(249,115,22,0.15)' : '#0f0f1a',
-                  border: `1px solid ${selectedDay?.day === d.day ? '#f97316' : '#1c1c2e'}`,
-                  color: selectedDay?.day === d.day ? '#f97316' : '#888',
-                }}>
-                {d.day}
-              </button>
-            ))}
+        <div className="px-5 mb-4">
+          <div className="overflow-x-auto">
+            <div className="flex gap-2 w-max">
+              {plan.days.map((d: any) => {
+                const isSelected = selectedDay?.day === d.day
+                return (
+                  <div key={d.day} className="flex items-center gap-0.5">
+                    <button onClick={() => setSelectedDay(d)}
+                      className="px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all"
+                      style={{
+                        background: isSelected ? 'rgba(249,115,22,0.15)' : '#0f0f1a',
+                        border: `1px solid ${isSelected ? '#f97316' : '#1c1c2e'}`,
+                        color: isSelected ? '#f97316' : '#888',
+                        borderRadius: editMode && isSelected ? '12px 0 0 12px' : undefined,
+                      }}>
+                      {d.day}
+                    </button>
+                    {editMode && isSelected && (
+                      <button onClick={() => deleteDay(d.day)}
+                        className="px-2 py-2 text-xs font-medium transition-all"
+                        style={{
+                          background: 'rgba(239,68,68,0.12)',
+                          border: '1px solid rgba(239,68,68,0.3)',
+                          borderLeft: 'none',
+                          borderRadius: '0 12px 12px 0',
+                          color: '#ef4444',
+                        }}>
+                        ×
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+              {editMode && plan.days.length < 7 && (
+                <button onClick={addDay}
+                  className="px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all"
+                  style={{
+                    background: 'rgba(249,115,22,0.08)',
+                    border: '1px dashed rgba(249,115,22,0.3)',
+                    color: '#f97316',
+                  }}>
+                  + Add Day
+                </button>
+              )}
+            </div>
           </div>
+          {/* Rename day dropdown */}
+          {editMode && selectedDay && (<>
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-xs" style={{ color: '#555' }}>Day:</span>
+              <select
+                value={selectedDay.day}
+                onChange={e => renameDay(selectedDay.day, e.target.value)}
+                className="rounded-lg px-2 py-1.5 text-xs outline-none"
+                style={{ background: '#14141f', border: '1px solid #1c1c2e', color: '#f0f0f0' }}>
+                {WEEKDAYS.map(wd => (
+                  <option key={wd} value={wd} disabled={wd !== selectedDay.day && plan.days.some((d: any) => d.day === wd)}>
+                    {wd}{wd !== selectedDay.day && plan.days.some((d: any) => d.day === wd) ? ' (taken)' : ''}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={selectedDay.name}
+                onChange={e => {
+                  const updatedDays = plan.days.map((d: any) =>
+                    d.day === selectedDay.day ? { ...d, name: e.target.value } : d
+                  )
+                  const updatedPlan = { ...plan, days: updatedDays }
+                  setPlan(updatedPlan)
+                  setSelectedDay(updatedDays.find((d: any) => d.day === selectedDay.day))
+                }}
+                onBlur={() => savePlanToServer(plan)}
+                placeholder="Day name (e.g. Push Day)"
+                className="flex-1 rounded-lg px-2 py-1.5 text-xs outline-none"
+                style={{ background: '#14141f', border: '1px solid #1c1c2e', color: '#f0f0f0' }}
+              />
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-xs" style={{ color: '#555' }}>Focus:</span>
+              <input
+                type="text"
+                value={selectedDay.focus || ''}
+                onChange={e => {
+                  const updatedDays = plan.days.map((d: any) =>
+                    d.day === selectedDay.day ? { ...d, focus: e.target.value } : d
+                  )
+                  const updatedPlan = { ...plan, days: updatedDays }
+                  setPlan(updatedPlan)
+                  setSelectedDay(updatedDays.find((d: any) => d.day === selectedDay.day))
+                }}
+                onBlur={() => savePlanToServer(plan)}
+                placeholder="e.g. Chest, Shoulders, Triceps"
+                className="flex-1 rounded-lg px-2 py-1.5 text-xs outline-none"
+                style={{ background: '#14141f', border: '1px solid #1c1c2e', color: '#f0f0f0' }}
+              />
+            </div>
+          </>)}
         </div>
       )}
 
@@ -339,6 +523,35 @@ export default function WorkoutPage() {
                           style={{ background: '#14141f', color: '#888' }}>↑</button>
                         <button onClick={() => moveExercise(exercise.id, 'down')} className="text-xs px-2 py-1 rounded-lg"
                           style={{ background: '#14141f', color: '#888' }}>↓</button>
+                        <div className="relative">
+                          <button onClick={() => setMovingExercise(movingExercise === exercise.id ? null : exercise.id)}
+                            className="text-xs px-2 py-1 rounded-lg"
+                            style={{
+                              background: movingExercise === exercise.id ? 'rgba(59,130,246,0.15)' : '#14141f',
+                              color: movingExercise === exercise.id ? '#3b82f6' : '#888',
+                              border: movingExercise === exercise.id ? '1px solid #3b82f6' : '1px solid transparent',
+                            }}>
+                            Move
+                          </button>
+                          {movingExercise === exercise.id && (
+                            <div className="absolute right-0 top-8 z-50 rounded-xl overflow-hidden shadow-lg"
+                              style={{ background: '#14141f', border: '1px solid #1c1c2e', minWidth: '140px' }}>
+                              <div className="px-3 py-1.5 text-xs" style={{ color: '#555', borderBottom: '1px solid #1c1c2e' }}>
+                                Move to...
+                              </div>
+                              {plan.days
+                                .filter((d: any) => d.day !== selectedDay.day)
+                                .map((d: any) => (
+                                  <button key={d.day}
+                                    onClick={() => moveExerciseToDay(exercise.id, d.day)}
+                                    className="w-full text-left px-3 py-2 text-xs hover:bg-white/5 transition-colors"
+                                    style={{ color: '#f0f0f0' }}>
+                                    {d.day} <span style={{ color: '#555' }}>· {d.name}</span>
+                                  </button>
+                                ))}
+                            </div>
+                          )}
+                        </div>
                         <button onClick={() => removeExercise(exercise.id)} className="text-xs px-2 py-1 rounded-lg"
                           style={{ background: 'rgba(239,68,68,0.15)', color: '#ef4444' }}>Remove</button>
                       </>
