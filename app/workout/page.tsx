@@ -6,6 +6,7 @@ import { BottomNav } from '@/components/ui/BottomNav'
 import { MUSCLE_GROUPS } from '@/types'
 import { localDate } from '@/lib/date'
 import CardioCard from '@/components/CardioCard'
+import HomeDayCard from '@/components/HomeDayCard'
 
 async function fetchOverloadSuggestion(exerciseName: string, sets: {weight_kg: number, reps: number}[]) {
   if (sets.length < 2) return null
@@ -66,6 +67,7 @@ export default function WorkoutPage() {
   const [newExercise, setNewExercise] = useState({
     name: '', muscle_group: 'chest', sets: 3, reps: '10', rest_seconds: 90, equipment: '', notes: '', youtube_url: ''
   })
+  const [trainingDays, setTrainingDays] = useState<string[] | null>(null)
 
   const today = localDate()
   const dayName = new Date().toLocaleDateString('en-US', { weekday: 'long' })
@@ -119,12 +121,16 @@ export default function WorkoutPage() {
   }, [sets])
 
   async function loadData() {
-    const [planRes, logRes, histRes] = await Promise.all([
+    const [planRes, logRes, histRes, progRes] = await Promise.all([
       fetch('/api/generate-plan'),
       fetch(`/api/log-workout?date=${today}`),
       fetch('/api/log-workout?limit=20'),
+      fetch('/api/get-progress'),
     ])
-    const [p, l, h] = await Promise.all([planRes.json(), logRes.json(), histRes.json()])
+    const [p, l, h, prog] = await Promise.all([
+      planRes.json(), logRes.json(), histRes.json(), progRes.json().catch(() => null),
+    ])
+    setTrainingDays(prog?.training_days ?? null)
     setPlan(p.plan)
 
     const todayPlan = p.plan?.days?.find((d: any) => d.day === dayName) || p.plan?.days?.[0]
@@ -849,6 +855,7 @@ export default function WorkoutPage() {
 
         {/* Cardio (scan the machine's summary screen or add manually) */}
         <CardioCard date={today} />
+        <HomeDayCard trainingDays={trainingDays} />
 
         {!selectedDay && (
           <div className="text-center py-12">

@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 const TABS = [
   { href: '/dashboard', icon: '⚡', label: 'Home' },
   { href: '/workout', icon: '🏋️', label: 'Workout' },
+  { href: '/sessions', icon: '🧘', label: 'Sessions' },
   { href: '/food', icon: '🍽️', label: 'Food' },
   { href: '/progress', icon: '📈', label: 'Progress' },
 ]
@@ -20,7 +21,7 @@ export function BottomNav() {
         return (
           <Link key={tab.href} href={tab.href}
             className="flex-1 flex flex-col items-center justify-center py-3 gap-1 transition-all"
-            style={{ color: active ? '#f97316' : '#555' }}>
+            style={{ color: active ? '#f97316' : '#9a9ab0' }}>
             <span className="text-xl">{tab.icon}</span>
             <span className="text-xs font-medium tracking-wide">{tab.label}</span>
             {active && (

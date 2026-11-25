@@ -49,3 +49,23 @@ insert into ironpulse.session_catalog (user_id,type,title,channel,youtube_id,dur
 (null,'yoga','Wind Down Yoga   |  12-Minute Bedtime Yoga','Yoga With Adriene','BiWDsfZ3zbo',12,'beginner',2.0,'none',true,true)
 on conflict do nothing;
 alter table ironpulse.session_catalog add constraint session_catalog_user_video unique (user_id, youtube_id);
+
+-- User prefers Yoga with Kassandra: replace other built-in yoga
+delete from ironpulse.session_catalog where user_id is null and type='yoga' and channel not ilike '%kassandra%' and youtube_id <> (select youtube_id from ironpulse.session_catalog where channel='Tom Merrick' limit 1);
+update ironpulse.session_catalog set type='stretch' where channel='Tom Merrick';
+insert into ironpulse.session_catalog (user_id,type,title,channel,youtube_id,duration_min,level,met,equipment,low_impact,embeddable) values
+(null,'yoga','10 min Morning Yoga Full Body Stretch - Yoga with Kassandra','Yoga with Kassandra','4pKly2JojMw',11,'beginner',2.5,'none',true,true),
+(null,'yoga','10 min Gentle Morning Yoga for Beginners (NO PROPS)','Yoga with Kassandra','C2RAjUEAoLI',11,'beginner',2.3,'none',true,true),
+(null,'yoga','10 min Morning Yoga Stretch for an ENERGY BOOST','Yoga with Kassandra','BPRE9o1cEgk',10,'beginner',2.5,'none',true,true),
+(null,'yoga','10 min Morning Yoga For Hips & Lower Back – Day #19 (HIPS & BACK MORNING YOGA)','Yoga with Kassandra','rBfdsyk8UK0',12,'beginner',2.3,'none',true,true),
+(null,'yoga','10 min Morning Yoga For Neck & Upper Back Relief – Day #10 (NECK & BACK YOGA STRETCH)','Yoga with Kassandra','SEOy2n_uarc',13,'beginner',2.3,'none',true,true),
+(null,'yoga','20 min Yoga for Flexibility - Sweet Release Feel Good Flow','Yoga with Kassandra','s-1vMbAgYWU',19,'beginner',2.5,'none',true,true),
+(null,'yoga','20 min Morning Yoga Workout - Strength & Energy Yoga Flow','Yoga with Kassandra','CM43AZaRXNw',19,'intermediate',3.3,'none',true,true),
+(null,'yoga','20 min Full Body Yoga - Intermediate Vinyasa Yoga','Yoga with Kassandra','5wUC4HlQwZc',21,'intermediate',3.3,'none',true,true),
+(null,'yoga','30 min Full Body Yoga - Intermediate Vinyasa Yoga','Yoga with Kassandra','Z6jRKThDCBU',35,'intermediate',3.5,'none',true,true),
+(null,'yoga','20 min Neck & Shoulder Yoga Release (NECK & SHOULDER STRETCHES)','Yoga with Kassandra','IlplXfNE45U',24,'beginner',2.3,'none',true,true),
+(null,'yoga','30 min Yoga for Flexibility - DEEP STRETCH VINYASA','Yoga with Kassandra','q1vPLx1YZ-s',29,'intermediate',3.0,'none',true,true),
+(null,'yoga','30 min Yin Yoga for Your Nervous System','Yoga with Kassandra','sVqH6qPDdh0',29,'beginner',2.0,'none',true,true),
+(null,'yoga','30 min Yin Yoga for Upper Back Knots - Beginner Yin for Upper Body Pain','Yoga with Kassandra','94hMk05dTws',32,'beginner',2.0,'none',true,true),
+(null,'yoga','35 min Morning Yoga to STRETCH & ENERGIZE','Yoga with Kassandra','ZgHo2xL3vX0',38,'intermediate',3.0,'none',true,true)
+on conflict do nothing;

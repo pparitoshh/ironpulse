@@ -4,6 +4,7 @@ import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { BottomNav } from '@/components/ui/BottomNav'
+import HomeDayCard from '@/components/HomeDayCard'
 import { localDate, daysAgo } from '@/lib/date'
 import { workoutStreak } from '@/lib/streak'
 
@@ -167,6 +168,8 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+
+        <HomeDayCard trainingDays={profile?.training_days} />
 
         {/* Calories burned today (cardio) */}
         <div className="p-4 rounded-2xl flex items-center justify-between" style={{ background: '#0f0f1a', border: '1px solid #1c1c2e' }}>
