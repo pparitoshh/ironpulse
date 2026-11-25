@@ -12,6 +12,36 @@ export const MACHINES = [
 
 export type Machine = typeof MACHINES[number]['value']
 
+/** Home sessions from the video catalog (logged into cardio_logs with machine = type). */
+export const SESSION_TYPES = [
+  { value: 'hiit', label: 'HIIT', icon: '⚡' },
+  { value: 'yoga', label: 'Yoga', icon: '🧘' },
+  { value: 'core', label: 'Core', icon: '🎯' },
+  { value: 'mobility', label: 'Mobility', icon: '🤸' },
+  { value: 'stretch', label: 'Stretch', icon: '🙆' },
+  { value: 'walk', label: 'Walk', icon: '🚶' },
+] as const
+
+export type SessionType = typeof SESSION_TYPES[number]['value']
+
+/** Icon + label for any cardio_logs.machine value (machines and home sessions). */
+export function activityInfo(value: string): { label: string; icon: string } {
+  return MACHINES.find(m => m.value === value) || SESSION_TYPES.find(t => t.value === value) || { label: value, icon: '❤️' }
+}
+
+/** kcal = MET x kg x hours. */
+export function metCalories(met: number, durationMin: number, weightKg?: number | null) {
+  return Math.round(met * (weightKg && weightKg > 30 ? weightKg : CONSOLE_DEFAULT_KG) * (durationMin / 60))
+}
+
+/** Extract an 11-char YouTube video id from any common URL form (or a bare id). */
+export function youtubeId(input: string): string | null {
+  const s = (input || '').trim()
+  if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s
+  const m = s.match(/(?:v=|youtu\.be\/|shorts\/|embed\/|live\/)([A-Za-z0-9_-]{11})/)
+  return m ? m[1] : null
+}
+
 export type Cardio = {
   machine: Machine
   duration_min: number

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getServiceClient } from '@/lib/supabase'
-import { MACHINES, cardioCalories, normalizeCardio } from '@/lib/cardio'
+import { MACHINES, SESSION_TYPES, cardioCalories, metCalories, normalizeCardio } from '@/lib/cardio'
 
 async function userIdOf() {
   const session = await getServerSession(authOptions)
@@ -32,7 +32,8 @@ export async function POST(req: NextRequest) {
   if (!body?.date) return NextResponse.json({ error: 'date required' }, { status: 400 })
 
   const c = normalizeCardio({ ...body, machine_type: body.machine, duration: body.duration_min })
-  if (MACHINES.some(m => m.value === body.machine)) c.machine = body.machine
+  const isSession = SESSION_TYPES.some(t => t.value === body.machine)
+  if (MACHINES.some(m => m.value === body.machine) || isSession) c.machine = body.machine
   if (!c.duration_min || c.duration_min <= 0) return NextResponse.json({ error: 'duration_min required' }, { status: 400 })
   c.calories_machine = body.calories_machine ?? c.calories_machine
 
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
   const { data: profile } = await supabase.from('user_profiles').select('weight_kg').eq('user_id', userId).single()
   // The user may have edited the final kcal on the confirm screen; respect that.
   const calories = body.calories != null && body.calories !== '' ? Math.round(Number(body.calories))
+    : isSession && c.mets ? metCalories(c.mets, c.duration_min, profile?.weight_kg)
     : cardioCalories(c, profile?.weight_kg)
 
   const { data, error } = await supabase.from('cardio_logs').insert({
@@ -47,7 +49,9 @@ export async function POST(req: NextRequest) {
     calories,
     user_id: userId,
     date: body.date,
-    source: body.source === 'photo' ? 'photo' : 'manual',
+    source: ['photo', 'video'].includes(body.source) ? body.source : 'manual',
+    catalog_id: typeof body.catalog_id === 'string' ? body.catalog_id : null,
+    title: typeof body.title === 'string' ? body.title.slice(0, 200) : null,
     raw: body.raw ?? null,
   }).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

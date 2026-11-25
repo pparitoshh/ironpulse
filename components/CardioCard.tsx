@@ -1,6 +1,6 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { MACHINES, cardioCalories } from '@/lib/cardio'
+import { MACHINES, activityInfo, cardioCalories } from '@/lib/cardio'
 
 type Props = {
   date: string
@@ -487,14 +487,14 @@ export default function CardioCard({ date, onChange }: Props) {
         ) : (
           <div className="flex flex-col gap-3">
             {sessions.map(s => {
-              const machine = MACHINES.find(m => m.value === s.machine)
+              const machine = activityInfo(s.machine)
               const detail = detailLine(s)
               return (
                 <div key={s.id} className="flex items-center gap-3">
                   <span className="text-xl">{machine?.icon || '❤️'}</span>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-bold" style={{ color: '#f0f0f0' }}>
-                      {machine?.label || s.machine} · {s.duration_min} min
+                      {s.title || machine.label} · {s.duration_min} min
                     </div>
                     {detail && (
                       <div className="text-xs truncate" style={{ color: '#b4b4c8' }}>
