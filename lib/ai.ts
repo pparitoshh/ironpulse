@@ -1,16 +1,40 @@
-// Shared LLM helpers. All providers are free tiers.
-// Text: Groq (OpenAI-compatible). Vision: Mistral pixtral.
-// Model names are env-overridable because providers retire models.
+// LLM router. Providers, models and fallback order come from config/llm.yaml —
+// change models there, not here. Keys come from env vars named in that file.
+import fs from 'fs'
+import path from 'path'
+import YAML from 'yaml'
 
-const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
-const MISTRAL_URL = 'https://api.mistral.ai/v1/chat/completions'
+type Provider = { base_url: string; key_env: string }
+type Step = {
+  provider: string
+  model: string
+  max_tokens?: number
+  timeout_s?: number
+  json_mode?: boolean
+  reasoning_effort?: string
+  temperature?: number
+}
+type LLMConfig = { providers: Record<string, Provider>; tasks: Record<string, Step[]> }
 
-export const TEXT_MODEL = process.env.GROQ_TEXT_MODEL || 'openai/gpt-oss-120b'
-export const VISION_MODEL = process.env.MISTRAL_VISION_MODEL || 'pixtral-12b-latest'
+export type Task =
+  | 'workout_plan' | 'estimate_macros' | 'progressive_overload'
+  | 'food_photo' | 'cardio_photo' | 'machine_photo'
 
-/** Pull the first JSON object out of a model reply (handles ```json fences and stray prose). */
+let cached: LLMConfig | null = null
+export function llmConfig(): LLMConfig {
+  if (!cached) {
+    const file = path.join(process.cwd(), 'config', 'llm.yaml')
+    cached = YAML.parse(fs.readFileSync(file, 'utf8')) as LLMConfig
+  }
+  return cached
+}
+
+/** Pull the first JSON object out of a model reply (handles ```json fences, prose, <think> blocks). */
 export function parseJSON<T = any>(text: string): T {
-  const clean = (text || '').replace(/```json|```/g, '').trim()
+  const clean = (text || '')
+    .replace(/<think>[\s\S]*?<\/think>/g, '')
+    .replace(/```json|```/g, '')
+    .trim()
   try {
     return JSON.parse(clean)
   } catch {
@@ -21,49 +45,66 @@ export function parseJSON<T = any>(text: string): T {
   }
 }
 
-async function post(url: string, key: string | undefined, body: any) {
-  if (!key) throw new Error(`Missing API key for ${url}`)
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '')
-    throw new Error(`LLM ${res.status}: ${detail.slice(0, 300)}`)
+async function callStep(step: Step, content: any): Promise<string> {
+  const provider = llmConfig().providers[step.provider]
+  if (!provider) throw new Error(`Unknown provider "${step.provider}" in llm.yaml`)
+  const key = process.env[provider.key_env]
+  if (!key) throw new Error(`Env var ${provider.key_env} is not set`)
+
+  const body: Record<string, any> = {
+    model: step.model,
+    messages: [{ role: 'user', content }],
+    max_tokens: step.max_tokens ?? 2000,
+    temperature: step.temperature ?? 0.2,
   }
-  const data = await res.json()
-  return data.choices?.[0]?.message?.content as string
+  if (step.json_mode) body.response_format = { type: 'json_object' }
+  if (step.reasoning_effort) body.reasoning_effort = step.reasoning_effort
+
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), (step.timeout_s ?? 30) * 1000)
+  try {
+    const res = await fetch(`${provider.base_url}/chat/completions`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    })
+    if (!res.ok) throw new Error(`${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`)
+    const data = await res.json()
+    const text = data.choices?.[0]?.message?.content
+    if (!text) throw new Error('empty reply')
+    return text
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
-/** Text prompt -> parsed JSON object, via Groq. */
-export async function askJSON<T = any>(prompt: string, opts: { maxTokens?: number; temperature?: number } = {}): Promise<T> {
-  const content = await post(GROQ_URL, process.env.GROQ_API_KEY, {
-    model: TEXT_MODEL,
-    messages: [{ role: 'user', content: prompt }],
-    temperature: opts.temperature ?? 0.2,
-    // gpt-oss is a reasoning model: thinking tokens count against max_tokens, so leave headroom.
-    max_tokens: (opts.maxTokens ?? 1000) + 1500,
-    reasoning_effort: 'low',
-    response_format: { type: 'json_object' },
-  })
-  return parseJSON<T>(content)
+/** Run a task through its fallback chain; returns parsed JSON from the first model that succeeds. */
+async function runTask<T>(task: Task, content: any): Promise<T> {
+  const steps = llmConfig().tasks[task]
+  if (!steps?.length) throw new Error(`No models configured for task "${task}" in llm.yaml`)
+  const errors: string[] = []
+  for (const step of steps) {
+    try {
+      return parseJSON<T>(await callStep(step, content))
+    } catch (e: any) {
+      const msg = e?.name === 'AbortError' ? 'timeout' : e?.message
+      errors.push(`${step.provider}/${step.model}: ${msg}`)
+      console.warn(`[llm] ${task} failed on ${step.provider}/${step.model}: ${msg}`)
+    }
+  }
+  throw new Error(`All models failed for ${task}: ${errors.join(' | ')}`)
 }
 
-/** Image + prompt -> parsed JSON object, via Mistral vision. */
-export async function askVisionJSON<T = any>(base64Image: string, mimeType: string, prompt: string): Promise<T> {
-  const content = await post(MISTRAL_URL, process.env.MISTRAL_API_KEY, {
-    model: VISION_MODEL,
-    temperature: 0.1,
-    max_tokens: 1200,
-    response_format: { type: 'json_object' },
-    messages: [{
-      role: 'user',
-      content: [
-        { type: 'text', text: prompt },
-        { type: 'image_url', image_url: `data:${mimeType};base64,${base64Image}` },
-      ],
-    }],
-  })
-  return parseJSON<T>(content)
+/** Text prompt -> JSON. */
+export function askJSON<T = any>(task: Task, prompt: string): Promise<T> {
+  return runTask<T>(task, prompt)
+}
+
+/** Image + prompt -> JSON. */
+export function askVisionJSON<T = any>(task: Task, base64Image: string, mimeType: string, prompt: string): Promise<T> {
+  return runTask<T>(task, [
+    { type: 'text', text: prompt },
+    { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Image}` } },
+  ])
 }

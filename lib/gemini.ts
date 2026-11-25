@@ -1,7 +1,25 @@
 import { askVisionJSON } from './ai'
 
+const num = (v: any) => Math.round(Number(typeof v === 'object' && v ? v.value ?? v.total : v) || 0)
+const str = (v: any) => (v == null ? '' : typeof v === 'string' ? v : Object.values(v).join(', '))
+
+/** Models don't always follow the schema exactly (e.g. quantity as an object); coerce to what the UI renders. */
+export function normalizeFood(r: any) {
+  return {
+    ...r,
+    food_name: str(r.food_name) || 'Food',
+    calories: num(r.calories),
+    protein_g: num(r.protein_g),
+    carbs_g: num(r.carbs_g),
+    fat_g: num(r.fat_g),
+    quantity: str(r.quantity),
+    notes: str(r.notes),
+    confidence: str(r.confidence),
+  }
+}
+
 export async function scanFoodImage(base64Image: string, mimeType: string) {
-  return askVisionJSON(base64Image, mimeType, `You are a precise nutrition analyst. Analyze this food image and estimate macros accurately.
+  return normalizeFood(await askVisionJSON('food_photo', base64Image, mimeType, `You are a precise nutrition analyst. Analyze this food image and estimate macros accurately.
 
 STEP 1 - IDENTIFY all food items visible:
 - List every ingredient separately
@@ -42,5 +60,5 @@ Return ONLY valid JSON with no markdown:
   ],
   "confidence": "high/medium/low",
   "notes": "any flags about hidden calories or uncertain items"
-}`)
+}`))
 }

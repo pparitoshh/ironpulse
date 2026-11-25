@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { estimateMacros } from '@/lib/groq'
+import { normalizeFood } from '@/lib/gemini'
 
 export const maxDuration = 60
 
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { description } = await req.json()
-    const result = await estimateMacros(description)
+    const result = normalizeFood(await estimateMacros(description))
     return NextResponse.json(result)
   } catch (error) {
     console.error('Estimate macros error:', error)

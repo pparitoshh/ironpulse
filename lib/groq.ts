@@ -52,7 +52,7 @@ Return ONLY valid JSON in this exact format:
   "notes": "Progressive overload tip here"
 }`
 
-  const parsed: any = await askJSON(prompt, { maxTokens: 4000, temperature: 0.3 })
+  const parsed: any = await askJSON('workout_plan', prompt)
 
   // Ensure stable unique IDs — don't trust Groq to generate non-duplicate IDs
   let counter = 0
@@ -108,7 +108,7 @@ Return ONLY valid JSON:
   "notes": "any flags about hidden calories"
 }`
 
-  return askJSON(prompt, { maxTokens: 800, temperature: 0.1 })
+  return askJSON('estimate_macros', prompt)
 }
 
 export async function getProgressiveOverloadSuggestion(
@@ -126,5 +126,5 @@ Return ONLY valid JSON:
   "reasoning": "brief explanation"
 }`
 
-  return askJSON(prompt, { maxTokens: 800, temperature: 0.1 })
+  return askJSON('progressive_overload', prompt)
 }

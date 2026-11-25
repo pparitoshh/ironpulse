@@ -1,0 +1,45 @@
+# IronPulse LLM config — the ONE place to change providers and models.
+#
+# - providers: endpoint + the NAME of the env var holding the key (keys live in
+#   Vercel env / .env.local, never in this file).
+# - tasks: each task lists models to try IN ORDER. If one fails or times out,
+#   the next is tried. To switch model: edit here, commit, push.
+# All providers below are free tiers.
+
+providers:
+  groq:
+    base_url: https://api.groq.com/openai/v1
+    key_env: GROQ_API_KEY
+  nvidia:
+    base_url: https://integrate.api.nvidia.com/v1
+    key_env: NVIDIA_API_KEY
+  mistral:
+    base_url: https://api.mistral.ai/v1
+    key_env: MISTRAL_API_KEY
+
+tasks:
+  # ---- text ----
+  workout_plan:
+    - { provider: groq, model: openai/gpt-oss-120b, max_tokens: 5500, timeout_s: 45, json_mode: true, reasoning_effort: low, temperature: 0.3 }
+    - { provider: groq, model: openai/gpt-oss-20b, max_tokens: 5500, timeout_s: 45, json_mode: true, reasoning_effort: low, temperature: 0.3 }
+
+  estimate_macros:
+    - { provider: groq, model: openai/gpt-oss-120b, max_tokens: 2500, timeout_s: 20, json_mode: true, reasoning_effort: low, temperature: 0.1 }
+    - { provider: groq, model: openai/gpt-oss-20b, max_tokens: 2500, timeout_s: 20, json_mode: true, reasoning_effort: low, temperature: 0.1 }
+
+  progressive_overload:
+    - { provider: groq, model: openai/gpt-oss-120b, max_tokens: 2000, timeout_s: 15, json_mode: true, reasoning_effort: low, temperature: 0.1 }
+    - { provider: groq, model: openai/gpt-oss-20b, max_tokens: 2000, timeout_s: 15, json_mode: true, reasoning_effort: low, temperature: 0.1 }
+
+  # ---- vision (photo scans) ----
+  food_photo:   # Mistral first: NVIDIA's reasoning model takes ~30 s on food
+    - { provider: mistral, model: pixtral-12b-latest, max_tokens: 1200, timeout_s: 30, json_mode: true, temperature: 0.1 }
+    - { provider: nvidia, model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning, max_tokens: 5000, timeout_s: 50, temperature: 0.1 }
+
+  cardio_photo:   # machine summary screen -> cardio log
+    - { provider: nvidia, model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning, max_tokens: 5000, timeout_s: 35, temperature: 0.1 }
+    - { provider: mistral, model: pixtral-12b-latest, max_tokens: 1200, timeout_s: 20, json_mode: true, temperature: 0.1 }
+
+  machine_photo:   # instruction placard -> exercise
+    - { provider: nvidia, model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning, max_tokens: 4000, timeout_s: 30, temperature: 0.1 }
+    - { provider: mistral, model: pixtral-12b-latest, max_tokens: 800, timeout_s: 20, json_mode: true, temperature: 0.1 }
