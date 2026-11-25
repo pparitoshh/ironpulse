@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { estimateMacros } from '@/lib/groq'
 
+export const maxDuration = 60
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)

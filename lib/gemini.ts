@@ -1,21 +1,7 @@
-import { groq } from './groq'
+import { askVisionJSON } from './ai'
 
 export async function scanFoodImage(base64Image: string, mimeType: string) {
-  const dataUrl = `data:${mimeType};base64,${base64Image}`
-
-  const response = await (groq.chat.completions.create as any)({
-    model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-    messages: [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'image_url',
-            image_url: { url: dataUrl },
-          },
-          {
-            type: 'text',
-            text: `You are a precise nutrition analyst. Analyze this food image and estimate macros accurately.
+  return askVisionJSON(base64Image, mimeType, `You are a precise nutrition analyst. Analyze this food image and estimate macros accurately.
 
 STEP 1 - IDENTIFY all food items visible:
 - List every ingredient separately
@@ -56,16 +42,5 @@ Return ONLY valid JSON with no markdown:
   ],
   "confidence": "high/medium/low",
   "notes": "any flags about hidden calories or uncertain items"
-}`,
-          },
-        ],
-      },
-    ],
-    temperature: 0.3,
-    max_tokens: 512,
-  })
-
-  const text = response.choices[0]?.message?.content || ''
-  const clean = text.replace(/```json|```/g, '').trim()
-  return JSON.parse(clean)
+}`)
 }

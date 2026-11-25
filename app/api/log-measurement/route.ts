@@ -12,9 +12,13 @@ export async function POST(req: NextRequest) {
     const supabase = getServiceClient()
     const userId = (session.user as any).id || session.user.email
 
+    const fields = ['date', 'weight_kg', 'chest_cm', 'waist_cm', 'hips_cm', 'bicep_cm', 'thigh_cm']
+    const row: Record<string, any> = {}
+    for (const f of fields) if (body[f] !== undefined) row[f] = body[f]
+
     const { data, error } = await supabase.from('body_measurements').insert({
+      ...row,
       user_id: userId,
-      ...body,
     }).select().single()
 
     if (error) throw error

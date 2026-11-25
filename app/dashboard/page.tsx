@@ -4,6 +4,8 @@ import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { BottomNav } from '@/components/ui/BottomNav'
+import { localDate, daysAgo } from '@/lib/date'
+import { workoutStreak } from '@/lib/streak'
 
 const MUSCLE_GROUPS = ['chest','back','shoulders','biceps','triceps','abs','quads','hamstrings','glutes','calves']
 
@@ -17,7 +19,7 @@ export default function Dashboard() {
   const [todayFood, setTodayFood] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDate()
   const dayName = new Date().toLocaleDateString('en-US', { weekday: 'long' })
 
   useEffect(() => {
@@ -38,7 +40,7 @@ export default function Dashboard() {
         fetch('/api/generate-plan'),
         fetch(`/api/log-workout?date=${today}`),
         fetch(`/api/log-food?date=${today}`),
-        fetch('/api/log-workout?limit=7'),
+        fetch('/api/log-workout?limit=60'),
       ])
       const [pl, l, f, r] = await Promise.all([
         planRes.json(), logRes.json(), foodRes.json(), recentRes.json()
@@ -53,12 +55,13 @@ export default function Dashboard() {
 
   const todayCalories = todayFood.reduce((s: number, f: any) => s + f.calories, 0)
   const todayProtein = todayFood.reduce((s: number, f: any) => s + parseFloat(f.protein_g || 0), 0)
-  const workoutStreak = recentLogs.filter(l => l.sets?.length > 0).length
+  const streak = workoutStreak(recentLogs)
   const todayPlan = plan?.days?.find((d: any) => d.day === dayName) || plan?.days?.[0]
 
   // Muscle heatmap from recent logs
   const trainedMuscles = new Set<string>()
-  recentLogs.slice(0, 3).forEach((log: any) => {
+  const threeDaysAgo = daysAgo(2)
+  recentLogs.filter((log: any) => log.date >= threeDaysAgo).forEach((log: any) => {
     log.sets?.forEach((s: any) => {
       if (s.muscle_group) trainedMuscles.add(s.muscle_group)
     })
@@ -133,7 +136,7 @@ export default function Dashboard() {
           {[
             { label: 'Calories', value: todayCalories, target: profile?.target_calories, unit: 'kcal', color: '#f97316' },
             { label: 'Protein', value: Math.round(todayProtein), target: profile?.target_protein, unit: 'g', color: '#3b82f6' },
-            { label: 'Streak', value: workoutStreak, target: null, unit: 'days', color: '#22c55e' },
+            { label: 'Streak', value: streak, target: null, unit: 'days', color: '#22c55e' },
           ].map(s => (
             <div key={s.label} className="p-3 rounded-2xl text-center" style={{ background: '#0f0f1a', border: '1px solid #1c1c2e' }}>
               <div className="text-2xl font-bold" style={{ color: s.color }}>{s.value}</div>

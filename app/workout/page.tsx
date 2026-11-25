@@ -4,6 +4,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { BottomNav } from '@/components/ui/BottomNav'
 import { MUSCLE_GROUPS } from '@/types'
+import { localDate } from '@/lib/date'
 
 async function fetchOverloadSuggestion(exerciseName: string, sets: {weight_kg: number, reps: number}[]) {
   if (sets.length < 2) return null
@@ -15,6 +16,29 @@ async function fetchOverloadSuggestion(exerciseName: string, sets: {weight_kg: n
     })
     return await res.json()
   } catch { return null }
+}
+
+/** Epley estimated one-rep max. */
+function e1rm(weight: number, reps: number) {
+  const w = Number(weight) || 0, r = Number(reps) || 0
+  if (w <= 0 || r <= 0) return 0
+  return r === 1 ? w : w * (1 + r / 30)
+}
+
+function restDoneAlert() {
+  try { navigator.vibrate?.([300, 150, 300]) } catch {}
+  try {
+    const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext
+    const ctx = new Ctx()
+    ;[0, 0.25].forEach(t => {
+      const o = ctx.createOscillator(), g = ctx.createGain()
+      o.frequency.value = 880
+      o.connect(g); g.connect(ctx.destination)
+      g.gain.setValueAtTime(0.3, ctx.currentTime + t)
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.2)
+      o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.2)
+    })
+  } catch {}
 }
 
 export default function WorkoutPage() {
@@ -42,7 +66,7 @@ export default function WorkoutPage() {
     name: '', muscle_group: 'chest', sets: 3, reps: '10', rest_seconds: 90, equipment: '', notes: '', youtube_url: ''
   })
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDate()
   const dayName = new Date().toLocaleDateString('en-US', { weekday: 'long' })
 
   useEffect(() => {
@@ -50,10 +74,19 @@ export default function WorkoutPage() {
     if (status === 'authenticated') loadData()
   }, [status])
 
+  // Rest timer counts down from a fixed end time, so it stays correct when the
+  // phone locks or the tab is backgrounded (setTimeout chains get throttled).
+  const restEndRef = useRef<number | null>(null)
   useEffect(() => {
-    if (restTimer === null) return
-    if (restTimer <= 0) { setRestTimer(null); return }
-    timerRef.current = setTimeout(() => setRestTimer(t => (t ?? 0) - 1), 1000)
+    if (restTimer === null || restEndRef.current === null) return
+    timerRef.current = setTimeout(() => {
+      const left = Math.max(0, Math.ceil((restEndRef.current! - Date.now()) / 1000))
+      if (left <= 0) {
+        restEndRef.current = null
+        setRestTimer(null)
+        restDoneAlert()
+      } else setRestTimer(left)
+    }, 250)
     return () => { if (timerRef.current) clearTimeout(timerRef.current) }
   }, [restTimer])
 
@@ -101,11 +134,14 @@ export default function WorkoutPage() {
     if (existing?.sets?.length) setSets(existing.sets)
 
     // Build PRs from history
+    // Best estimated 1RM per exercise from PREVIOUS days only (today's sets must not
+    // compete against themselves).
     const prMap: Record<string, number> = {}
-    h.forEach((log: any) => {
+    h.filter((log: any) => log.date !== today).forEach((log: any) => {
       log.sets?.forEach((s: any) => {
         const key = s.exercise_name
-        if (!prMap[key] || s.weight_kg > prMap[key]) prMap[key] = s.weight_kg
+        const e = e1rm(s.weight_kg, s.reps)
+        if (e > 0 && (!prMap[key] || e > prMap[key])) prMap[key] = e
       })
     })
     setPRs(prMap)
@@ -132,10 +168,10 @@ export default function WorkoutPage() {
     setSets(prev => prev.map((s, i) => {
       if (i !== idx) return s
       const updated = { ...s, [key]: value }
-      // Check PR
-      if (key === 'weight_kg' && prs[s.exercise_name] && value > prs[s.exercise_name]) {
-        updated.is_pr = true
-      }
+      // PR = beats the best previous estimated 1RM (weight or reps). Recomputed on
+      // every edit so lowering the weight clears the badge.
+      const best = prs[s.exercise_name]
+      updated.is_pr = !!best && e1rm(updated.weight_kg, updated.reps) > best
       return updated
     }))
   }
@@ -145,6 +181,7 @@ export default function WorkoutPage() {
   }
 
   function startRest(seconds: number) {
+    restEndRef.current = Date.now() + seconds * 1000
     setRestMax(seconds)
     setRestTimer(seconds)
   }

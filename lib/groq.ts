@@ -1,8 +1,4 @@
-import Groq from 'groq-sdk'
-
-export const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-})
+import { askJSON } from './ai'
 
 export async function generateWorkoutPlan(profile: {
   gender: string
@@ -56,16 +52,7 @@ Return ONLY valid JSON in this exact format:
   "notes": "Progressive overload tip here"
 }`
 
-  const completion = await groq.chat.completions.create({
-    messages: [{ role: 'user', content: prompt }],
-    model: 'llama-3.3-70b-versatile',
-    temperature: 0.3,
-    max_tokens: 3000,
-  })
-
-  const text = completion.choices[0]?.message?.content || '{}'
-  const clean = text.replace(/```json|```/g, '').trim()
-  const parsed = JSON.parse(clean)
+  const parsed: any = await askJSON(prompt, { maxTokens: 4000, temperature: 0.3 })
 
   // Ensure stable unique IDs — don't trust Groq to generate non-duplicate IDs
   let counter = 0
@@ -121,16 +108,7 @@ Return ONLY valid JSON:
   "notes": "any flags about hidden calories"
 }`
 
-  const completion = await groq.chat.completions.create({
-    messages: [{ role: 'user', content: prompt }],
-    model: 'llama-3.3-70b-versatile',
-    temperature: 0.1,
-    max_tokens: 300,
-  })
-
-  const text = completion.choices[0]?.message?.content || '{}'
-  const clean = text.replace(/```json|```/g, '').trim()
-  return JSON.parse(clean)
+  return askJSON(prompt, { maxTokens: 800, temperature: 0.1 })
 }
 
 export async function getProgressiveOverloadSuggestion(
@@ -148,14 +126,5 @@ Return ONLY valid JSON:
   "reasoning": "brief explanation"
 }`
 
-  const completion = await groq.chat.completions.create({
-    messages: [{ role: 'user', content: prompt }],
-    model: 'llama-3.3-70b-versatile',
-    temperature: 0.1,
-    max_tokens: 200,
-  })
-
-  const text = completion.choices[0]?.message?.content || '{}'
-  const clean = text.replace(/```json|```/g, '').trim()
-  return JSON.parse(clean)
+  return askJSON(prompt, { maxTokens: 800, temperature: 0.1 })
 }

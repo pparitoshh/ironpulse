@@ -7,6 +7,7 @@ export const metadata: Metadata = {
   description: 'AI-powered workout planner, exercise logger, and nutrition tracker',
   manifest: '/manifest.json',
   themeColor: '#080810',
+  icons: { icon: '/icon-192.png', apple: '/icon-192.png' },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

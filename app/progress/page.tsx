@@ -4,6 +4,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { BottomNav } from '@/components/ui/BottomNav'
+import { localDate, daysAgo } from '@/lib/date'
 
 export default function ProgressPage() {
   const { data: session, status } = useSession()
@@ -15,7 +16,7 @@ export default function ProgressPage() {
   const [showMeasure, setShowMeasure] = useState(false)
   const [measure, setMeasure] = useState({ weight_kg: '', chest_cm: '', waist_cm: '', hips_cm: '', bicep_cm: '', thigh_cm: '' })
   const [activeChart, setActiveChart] = useState<'weight' | 'calories' | 'volume'>('weight')
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDate()
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/')
@@ -37,9 +38,7 @@ export default function ProgressPage() {
 
     // Fetch last 7 days of food logs for calorie chart
     const last7 = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date()
-      d.setDate(d.getDate() - (6 - i))
-      return d.toISOString().slice(0, 10)
+      return daysAgo(6 - i)
     })
     const foodResults = await Promise.all(last7.map(date => fetch(`/api/log-food?date=${date}`).then(r => r.json())))
     const calData = last7.map((date, i) => ({
@@ -66,12 +65,13 @@ export default function ProgressPage() {
   }
 
   // PRs from workout logs
-  const prMap: Record<string, { weight: number; date: string }> = {}
+  const prMap: Record<string, { weight: number; reps: number; date: string }> = {}
   workoutLogs.forEach((log: any) => {
     log.sets?.forEach((s: any) => {
       const key = s.exercise_name
-      if (!prMap[key] || s.weight_kg > prMap[key].weight) {
-        prMap[key] = { weight: s.weight_kg, date: log.date }
+      const cur = prMap[key]
+      if (!cur || s.weight_kg > cur.weight || (s.weight_kg === cur.weight && s.reps > cur.reps)) {
+        prMap[key] = { weight: s.weight_kg, reps: s.reps, date: log.date }
       }
     })
   })
@@ -81,7 +81,7 @@ export default function ProgressPage() {
   const weeklyVolume = workoutLogs.slice(0, 7).map((log: any) => ({
     date: log.date?.slice(5),
     sets: log.sets?.length || 0,
-    volume: log.sets?.reduce((s: number, set: any) => s + (set.weight_kg * set.reps), 0) || 0,
+    volume: Math.round(log.sets?.reduce((s: number, set: any) => s + ((Number(set.weight_kg) || 0) * (Number(set.reps) || 0)), 0) || 0),
   })).reverse()
 
   // Weight chart data
@@ -90,12 +90,19 @@ export default function ProgressPage() {
     weight: m.weight_kg,
   }))
 
-  // Streak
+  // Workouts logged (last 30 logs)
   const streak = workoutLogs.filter(l => l.sets?.length > 0).length
   const totalSets = workoutLogs.reduce((s, l) => s + (l.sets?.length || 0), 0)
   const latestWeight = measurements.length > 0 ? measurements[measurements.length - 1].weight_kg : null
   const firstWeight = measurements.length > 1 ? measurements[0].weight_kg : null
   const weightChange = latestWeight && firstWeight ? (latestWeight - firstWeight).toFixed(1) : null
+
+  // Green when the weight moves in the direction of the goal.
+  const delta = weightChange ? parseFloat(weightChange) : 0
+  const wantsGain = profile?.goal === 'bulk' || profile?.goal === 'strength'
+  const wantsLoss = profile?.goal === 'cut'
+  const good = wantsGain ? delta > 0 : wantsLoss ? delta < 0 : Math.abs(delta) <= 1
+  const weightDeltaColor = !weightChange ? '#888' : good ? '#22c55e' : '#ef4444'
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: '#080810' }}>
@@ -108,7 +115,7 @@ export default function ProgressPage() {
       return (
         <div className="px-3 py-2 rounded-xl text-xs" style={{ background: '#14141f', border: '1px solid #1c1c2e' }}>
           <p style={{ color: '#888' }}>{label}</p>
-          <p style={{ color: '#f97316' }}>{payload[0]?.value} {activeChart === 'weight' ? 'kg' : activeChart === 'calories' ? 'kcal' : 'sets'}</p>
+          <p style={{ color: '#f97316' }}>{payload[0]?.value} {activeChart === 'weight' ? 'kg' : activeChart === 'calories' ? 'kcal' : 'kg lifted'}</p>
         </div>
       )
     }
@@ -136,7 +143,7 @@ export default function ProgressPage() {
           {[
             { label: 'Workouts', value: streak, unit: 'logged', color: '#f97316' },
             { label: 'Total Sets', value: totalSets, unit: 'sets', color: '#3b82f6' },
-            { label: 'Weight Δ', value: weightChange ? `${weightChange}kg` : '–', unit: '', color: weightChange && parseFloat(weightChange) > 0 ? '#22c55e' : '#ef4444' },
+            { label: 'Weight Δ', value: weightChange ? `${weightChange}kg` : '–', unit: '', color: weightDeltaColor },
           ].map(s => (
             <div key={s.label} className="p-3 rounded-2xl text-center" style={{ background: '#0f0f1a', border: '1px solid #1c1c2e' }}>
               <div className="text-2xl font-bold" style={{ color: s.color }}>{s.value}</div>
@@ -185,7 +192,7 @@ export default function ProgressPage() {
                   <XAxis dataKey="date" tick={{ fill: '#555', fontSize: 10 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill: '#555', fontSize: 10 }} axisLine={false} tickLine={false} />
                   <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey="sets" fill="#f97316" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="volume" fill="#f97316" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -224,7 +231,7 @@ export default function ProgressPage() {
                 <div key={name} className="flex items-center justify-between py-2 border-b" style={{ borderColor: '#1c1c2e' }}>
                   <span className="text-sm font-medium">{name}</span>
                   <div className="text-right">
-                    <span className="font-bold" style={{ color: '#f97316' }}>{data.weight}kg</span>
+                    <span className="font-bold" style={{ color: '#f97316' }}>{data.weight}kg × {data.reps}</span>
                     <div className="text-xs" style={{ color: '#555' }}>{data.date}</div>
                   </div>
                 </div>

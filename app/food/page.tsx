@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { BottomNav } from '@/components/ui/BottomNav'
+import { localDate } from '@/lib/date'
 
 const MEALS = ['breakfast', 'lunch', 'dinner', 'snack'] as const
 type MealType = typeof MEALS[number]
@@ -29,7 +30,7 @@ export default function FoodPage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDate()
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/')

@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth'
 import { generateWorkoutPlan } from '@/lib/groq'
 import { getServiceClient } from '@/lib/supabase'
 
+export const maxDuration = 60
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
