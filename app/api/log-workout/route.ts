@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getServiceClient } from '@/lib/supabase'
+import { minutesBetween, strengthCalories } from '@/lib/strength'
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,14 +13,27 @@ export async function POST(req: NextRequest) {
     const supabase = getServiceClient()
     const userId = (session.user as any).id || session.user.email
 
-    const { data, error } = await supabase.from('workout_logs').upsert({
+    const row: Record<string, any> = {
       user_id: userId,
       date: body.date,
       day_name: body.day_name,
       sets: body.sets,
       duration_minutes: body.duration_minutes,
       notes: body.notes,
-    }, { onConflict: 'user_id,date' }).select().single()
+    }
+    // Session timing: only touch the columns the client sent (null clears ended_at on "continue").
+    if ('started_at' in body) row.started_at = body.started_at || null
+    if ('ended_at' in body) row.ended_at = body.ended_at || null
+    if (row.started_at) row.duration_minutes = minutesBetween(row.started_at, row.ended_at)
+
+    if (row.ended_at && Array.isArray(body.sets)) {
+      const { data: profile } = await supabase.from('user_profiles').select('weight_kg').eq('user_id', userId).single()
+      row.calories = strengthCalories(body.sets, row.duration_minutes || 0, profile?.weight_kg)
+    } else if ('ended_at' in body) {
+      row.calories = null
+    }
+
+    const { data, error } = await supabase.from('workout_logs').upsert(row, { onConflict: 'user_id,date' }).select().single()
 
     if (error) throw error
     return NextResponse.json(data)

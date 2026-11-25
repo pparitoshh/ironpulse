@@ -58,7 +58,9 @@ export default function Dashboard() {
   }
 
   const todayCalories = todayFood.reduce((s: number, f: any) => s + f.calories, 0)
-  const cardioBurned = todayCardio.reduce((s: number, c: any) => s + (Number(c.calories) || 0), 0)
+  const cardioOnly = todayCardio.reduce((s: number, c: any) => s + (Number(c.calories) || 0), 0)
+  const liftKcal = Number(todayLog?.calories) || 0
+  const cardioBurned = cardioOnly + liftKcal
   const cardioMinutes = Math.round(todayCardio.reduce((s: number, c: any) => s + (Number(c.duration_min) || 0), 0))
   const todayProtein = todayFood.reduce((s: number, f: any) => s + parseFloat(f.protein_g || 0), 0)
   const streak = workoutStreak(recentLogs)
@@ -177,7 +179,8 @@ export default function Dashboard() {
             <div className="text-xs uppercase tracking-widest font-semibold" style={{ color: '#b4b4c8' }}>🔥 Burned today</div>
             <div className="text-2xl font-bold mt-1" style={{ color: '#f97316' }}>{cardioBurned} kcal</div>
             <div className="text-sm mt-0.5" style={{ color: '#b4b4c8' }}>
-              {todayCardio.length ? `${todayCardio.length} cardio · ${cardioMinutes} min` : 'No cardio logged yet'}
+              {[liftKcal ? `🏋️ ${liftKcal} lifting` : '', todayCardio.length ? `🫀 ${cardioOnly} cardio · ${cardioMinutes} min` : '']
+                .filter(Boolean).join(' · ') || 'Nothing logged yet'}
             </div>
           </div>
           <div className="text-right">

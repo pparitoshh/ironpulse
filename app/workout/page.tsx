@@ -7,6 +7,8 @@ import { MUSCLE_GROUPS } from '@/types'
 import { localDate } from '@/lib/date'
 import CardioCard from '@/components/CardioCard'
 import HomeDayCard from '@/components/HomeDayCard'
+import WorkoutSummary from '@/components/WorkoutSummary'
+import { clock, minutesBetween } from '@/lib/strength'
 
 async function fetchOverloadSuggestion(exerciseName: string, sets: {weight_kg: number, reps: number}[]) {
   if (sets.length < 2) return null
@@ -43,6 +45,14 @@ function restDoneAlert() {
   } catch {}
 }
 
+function elapsedLabel(startIso: string | null) {
+  if (!startIso) return '0:00'
+  const s = Math.max(0, Math.floor((Date.now() - new Date(startIso).getTime()) / 1000))
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60
+  const mm = String(m).padStart(h ? 2 : 1, '0'), ss = String(sec).padStart(2, '0')
+  return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`
+}
+
 export default function WorkoutPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -56,7 +66,15 @@ export default function WorkoutPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [overloadTips, setOverloadTips] = useState<Record<string, any>>({})
-  const [startTime] = useState(Date.now())
+  // Session timing (stored on the day's workout_logs row, so it survives reloads)
+  const [startedAt, setStartedAt] = useState<string | null>(null)
+  const [endedAt, setEndedAt] = useState<string | null>(null)
+  const [sessionKcal, setSessionKcal] = useState<number | null>(null)
+  const [showSummary, setShowSummary] = useState(false)
+  const [summaryCardio, setSummaryCardio] = useState<any[]>([])
+  const [, setTick] = useState(0)
+  const timingRef = useRef<{ startedAt: string | null; endedAt: string | null }>({ startedAt: null, endedAt: null })
+  timingRef.current = { startedAt, endedAt }
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const autoSaveRef = useRef<NodeJS.Timeout | null>(null)
   const [autoSaving, setAutoSaving] = useState(false)
@@ -96,29 +114,79 @@ export default function WorkoutPage() {
   // Auto-save sets after changes (debounced 1.5s)
   const setsLoaded = useRef(false)
   useEffect(() => {
-    if (!setsLoaded.current) {
-      setsLoaded.current = sets.length > 0
-      return
-    }
+    // Skip until today's log has loaded, so we never overwrite it with an empty session.
+    if (!setsLoaded.current) return
     if (sets.length === 0) return
     if (autoSaveRef.current) clearTimeout(autoSaveRef.current)
     autoSaveRef.current = setTimeout(async () => {
       setAutoSaving(true)
-      const duration = Math.round((Date.now() - startTime) / 60000)
-      await fetch('/api/log-workout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          date: today,
-          day_name: selectedDay?.name || dayName,
-          sets,
-          duration_minutes: duration,
-        }),
-      })
+      const res = await postLog(sets, timingRef.current.startedAt, timingRef.current.endedAt)
+      if (res?.calories != null) setSessionKcal(res.calories)
       setAutoSaving(false)
     }, 1500)
     return () => { if (autoSaveRef.current) clearTimeout(autoSaveRef.current) }
   }, [sets])
+
+  // Live elapsed clock while a session is running.
+  useEffect(() => {
+    if (!startedAt || endedAt) return
+    const iv = setInterval(() => setTick(t => t + 1), 1000)
+    return () => clearInterval(iv)
+  }, [startedAt, endedAt])
+
+  async function postLog(currentSets: any[], started: string | null, ended: string | null) {
+    const res = await fetch('/api/log-workout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: today,
+        day_name: selectedDay?.name || dayName,
+        sets: currentSets,
+        started_at: started,
+        ended_at: ended,
+      }),
+    })
+    return res.ok ? res.json() : null
+  }
+
+  async function startWorkout() {
+    const now = new Date().toISOString()
+    setStartedAt(now)
+    setEndedAt(null)
+    await postLog(sets, now, null)
+  }
+
+  async function finishWorkout() {
+    setSaving(true)
+    const start = startedAt || new Date(Date.now() - 60000).toISOString()
+    const end = new Date().toISOString()
+    setStartedAt(start)
+    setEndedAt(end)
+    const [res, cardio] = await Promise.all([
+      postLog(sets, start, end),
+      fetch(`/api/cardio?date=${today}`).then(r => r.ok ? r.json() : []).catch(() => []),
+    ])
+    setSessionKcal(res?.calories ?? 0)
+    setSummaryCardio(Array.isArray(cardio) ? cardio : [])
+    setSaving(false)
+    setSaved(true)
+    setShowSummary(true)
+    loadOverloadTips()
+  }
+
+  async function continueWorkout() {
+    setShowSummary(false)
+    setSaved(false)
+    setEndedAt(null)
+    setSessionKcal(null)
+    await postLog(sets, startedAt, null)
+  }
+
+  async function openSummary() {
+    const cardio = await fetch(`/api/cardio?date=${today}`).then(r => r.ok ? r.json() : []).catch(() => [])
+    setSummaryCardio(Array.isArray(cardio) ? cardio : [])
+    setShowSummary(true)
+  }
 
   async function loadData() {
     const [planRes, logRes, histRes, progRes] = await Promise.all([
@@ -139,6 +207,10 @@ export default function WorkoutPage() {
     // Load existing sets
     const existing = Array.isArray(l) ? l[0] : l
     if (existing?.sets?.length) setSets(existing.sets)
+    if (existing?.started_at) setStartedAt(existing.started_at)
+    if (existing?.ended_at) { setEndedAt(existing.ended_at); setSaved(true) }
+    if (existing?.calories != null) setSessionKcal(existing.calories)
+    setsLoaded.current = true
 
     // Build PRs from history
     // Best estimated 1RM per exercise from PREVIOUS days only (today's sets must not
@@ -155,6 +227,7 @@ export default function WorkoutPage() {
   }
 
   function addSet(exercise: any) {
+    if (!startedAt) setStartedAt(new Date().toISOString())
     const existingSets = sets.filter(s => s.exercise_id === exercise.id)
     const lastSet = existingSets[existingSets.length - 1]
     const newSet = {
@@ -193,22 +266,7 @@ export default function WorkoutPage() {
     setRestTimer(seconds)
   }
 
-  async function saveWorkout() {
-    setSaving(true)
-    const duration = Math.round((Date.now() - startTime) / 60000)
-    await fetch('/api/log-workout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        date: today,
-        day_name: selectedDay?.name || dayName,
-        sets,
-        duration_minutes: duration,
-      }),
-    })
-    setSaving(false)
-    setSaved(true)
-
+  async function loadOverloadTips() {
     // Fetch progressive overload suggestions for next session
     const exerciseNames = Array.from(new Set(sets.map(s => s.exercise_name)))
     const tips: Record<string, any> = {}
@@ -391,6 +449,53 @@ export default function WorkoutPage() {
           </button>
         )}
       </div>
+
+      {/* Session bar: start / live clock / finished */}
+      {selectedDay && (
+        <div className="mx-5 mb-4">
+          {!startedAt ? (
+            <button onClick={startWorkout}
+              className="w-full py-4 rounded-2xl font-bold text-lg active:scale-95 transition-all"
+              style={{ background: '#22c55e', color: '#fff', boxShadow: '0 4px 0 #15803d' }}>
+              ▶ Start workout
+            </button>
+          ) : !endedAt ? (
+            <div className="rounded-2xl p-4 flex items-center justify-between"
+              style={{ background: 'rgba(34,197,94,0.12)', border: '2px solid #22c55e' }}>
+              <div>
+                <div className="text-xs uppercase tracking-widest font-bold" style={{ color: '#86efac' }}>● In progress · started {clock(startedAt)}</div>
+                <div className="text-3xl font-bold mt-1 font-mono" style={{ color: '#f0f0f0' }}>{elapsedLabel(startedAt)}</div>
+              </div>
+              <button onClick={finishWorkout} disabled={saving || sets.length === 0}
+                className="px-4 py-3 rounded-xl font-bold text-sm active:scale-95 transition-all disabled:opacity-40"
+                style={{ background: '#f97316', color: '#fff' }}>🏁 Finish</button>
+            </div>
+          ) : (
+            <button onClick={openSummary} className="w-full rounded-2xl p-4 text-left active:scale-[0.99] transition-all"
+              style={{ background: '#0f0f1a', border: '2px solid #22c55e' }}>
+              <div className="text-xs uppercase tracking-widest font-bold" style={{ color: '#86efac' }}>✅ Workout finished</div>
+              <div className="text-lg font-bold mt-1" style={{ color: '#f0f0f0' }}>
+                {clock(startedAt)} → {clock(endedAt)} · {minutesBetween(startedAt, endedAt)} min{sessionKcal != null ? ` · 🔥 ${sessionKcal} kcal` : ''}
+              </div>
+              <div className="text-sm mt-0.5" style={{ color: '#b4b4c8' }}>Tap for summary</div>
+            </button>
+          )}
+        </div>
+      )}
+
+      {showSummary && (
+        <WorkoutSummary
+          dayName={selectedDay?.name || dayName}
+          startedAt={startedAt}
+          endedAt={endedAt}
+          minutes={minutesBetween(startedAt, endedAt)}
+          sets={sets}
+          strengthKcal={sessionKcal ?? 0}
+          cardio={summaryCardio}
+          onClose={() => setShowSummary(false)}
+          onContinue={continueWorkout}
+        />
+      )}
 
       {/* Rest Timer */}
       {restTimer !== null && (
@@ -821,15 +926,15 @@ export default function WorkoutPage() {
 
         {/* Save button */}
         {sets.length > 0 && (
-          <button onClick={saveWorkout} disabled={saving}
+          <button onClick={endedAt ? openSummary : finishWorkout} disabled={saving}
             className="w-full py-4 rounded-2xl font-bold text-base transition-all active:scale-95 disabled:opacity-50"
-            style={{ background: saved ? '#22c55e' : '#f97316', color: '#fff' }}>
+            style={{ background: endedAt ? '#22c55e' : '#f97316', color: '#fff' }}>
             {saving ? (
               <span className="flex items-center justify-center gap-2">
                 <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                Saving...
+                Finishing...
               </span>
-            ) : saved ? '✅ Workout Saved!' : `Save Workout (${sets.length} sets)`}
+            ) : endedAt ? '✅ Finished · View summary' : `🏁 Finish workout (${sets.length} sets)`}
           </button>
         )}
 
