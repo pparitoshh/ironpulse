@@ -442,6 +442,13 @@ function SessionsPage() {
     if (durFilter === '15to25' && !(d > 15 && d <= 25)) return false
     if (durFilter === '25plus' && !(d > 25)) return false
     return true
+  }).sort((a: Catalog, b: Catalog) => {
+    // Own videos first, then the SESSION_TYPES order (HIIT, Yoga, ...), then shortest first.
+    const own = Number(!!b.user_id) - Number(!!a.user_id)
+    if (own) return own
+    const order = SESSION_VALUES as readonly string[]
+    const ta = order.indexOf(a.type), tb = order.indexOf(b.type)
+    return ta - tb || Number(a.duration_min) - Number(b.duration_min)
   })
 
   return (
@@ -455,7 +462,7 @@ function SessionsPage() {
         </p>
 
         {/* Type filter */}
-        <div className="flex gap-2 overflow-x-auto mt-5 pb-1">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar mt-5 pb-1">
           <Chip active={typeFilter === 'all'} onClick={() => setTypeFilter('all')}>
             All
           </Chip>
@@ -467,7 +474,7 @@ function SessionsPage() {
         </div>
 
         {/* Duration filter */}
-        <div className="flex gap-2 overflow-x-auto mt-2 pb-1">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar mt-2 pb-1">
           {DURATIONS.map(d => (
             <Chip key={d.value} active={durFilter === d.value} onClick={() => setDurFilter(d.value)}>
               {d.label}
@@ -476,7 +483,7 @@ function SessionsPage() {
         </div>
 
         {/* Level filter */}
-        <div className="flex gap-2 overflow-x-auto mt-2 pb-1">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar mt-2 pb-1">
           {LEVELS.map(l => (
             <Chip key={l.value} active={levelFilter === l.value} onClick={() => setLevelFilter(l.value)}>
               {l.label}

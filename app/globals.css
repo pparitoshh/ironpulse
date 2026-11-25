@@ -36,6 +36,10 @@ body {
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
+/* Horizontal chip rows: scroll without a visible bar */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
 /* Range input */
 input[type='range'] {
   -webkit-appearance: none;
