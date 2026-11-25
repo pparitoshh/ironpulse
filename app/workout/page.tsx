@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { BottomNav } from '@/components/ui/BottomNav'
 import { MUSCLE_GROUPS } from '@/types'
 import { localDate } from '@/lib/date'
+import CardioCard from '@/components/CardioCard'
 
 async function fetchOverloadSuggestion(exerciseName: string, sets: {weight_kg: number, reps: number}[]) {
   if (sets.length < 2) return null
@@ -845,6 +846,9 @@ export default function WorkoutPage() {
             </div>
           </div>
         )}
+
+        {/* Cardio (scan the machine's summary screen or add manually) */}
+        <CardioCard date={today} />
 
         {!selectedDay && (
           <div className="text-center py-12">

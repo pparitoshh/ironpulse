@@ -36,9 +36,9 @@ tasks:
     - { provider: mistral, model: pixtral-12b-latest, max_tokens: 1200, timeout_s: 30, json_mode: true, temperature: 0.1 }
     - { provider: nvidia, model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning, max_tokens: 5000, timeout_s: 50, temperature: 0.1 }
 
-  cardio_photo:   # machine summary screen -> cardio log
-    - { provider: nvidia, model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning, max_tokens: 5000, timeout_s: 35, temperature: 0.1 }
-    - { provider: mistral, model: pixtral-12b-latest, max_tokens: 1200, timeout_s: 20, json_mode: true, temperature: 0.1 }
+  cardio_photo:   # machine summary screen -> cardio log. Mistral reads it in ~2 s; NVIDIA (reasoning) took 25-35 s
+    - { provider: mistral, model: pixtral-12b-latest, max_tokens: 1200, timeout_s: 25, json_mode: true, temperature: 0.1 }
+    - { provider: nvidia, model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning, max_tokens: 5000, timeout_s: 30, temperature: 0.1 }
 
   machine_photo:   # instruction placard -> exercise
     - { provider: nvidia, model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning, max_tokens: 4000, timeout_s: 30, temperature: 0.1 }

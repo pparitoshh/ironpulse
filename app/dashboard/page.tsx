@@ -13,6 +13,7 @@ export default function Dashboard() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [profile, setProfile] = useState<any>(null)
+  const [todayCardio, setTodayCardio] = useState<any[]>([])
   const [plan, setPlan] = useState<any>(null)
   const [todayLog, setTodayLog] = useState<any>(null)
   const [recentLogs, setRecentLogs] = useState<any[]>([])
@@ -36,15 +37,17 @@ export default function Dashboard() {
       setProfile(p)
 
       // Fetch remaining data in parallel — generate-plan GET returns existing plan only
-      const [planRes, logRes, foodRes, recentRes] = await Promise.all([
+      const [planRes, logRes, foodRes, recentRes, cardioRes] = await Promise.all([
         fetch('/api/generate-plan'),
         fetch(`/api/log-workout?date=${today}`),
         fetch(`/api/log-food?date=${today}`),
         fetch('/api/log-workout?limit=60'),
+        fetch(`/api/cardio?date=${today}`),
       ])
-      const [pl, l, f, r] = await Promise.all([
-        planRes.json(), logRes.json(), foodRes.json(), recentRes.json()
+      const [pl, l, f, r, c] = await Promise.all([
+        planRes.json(), logRes.json(), foodRes.json(), recentRes.json(), cardioRes.json().catch(() => [])
       ])
+      setTodayCardio(Array.isArray(c) ? c : [])
       setPlan(pl.plan)
       setTodayLog(Array.isArray(l) ? l[0] : l)
       setTodayFood(f)
@@ -54,6 +57,8 @@ export default function Dashboard() {
   }
 
   const todayCalories = todayFood.reduce((s: number, f: any) => s + f.calories, 0)
+  const cardioBurned = todayCardio.reduce((s: number, c: any) => s + (Number(c.calories) || 0), 0)
+  const cardioMinutes = Math.round(todayCardio.reduce((s: number, c: any) => s + (Number(c.duration_min) || 0), 0))
   const todayProtein = todayFood.reduce((s: number, f: any) => s + parseFloat(f.protein_g || 0), 0)
   const streak = workoutStreak(recentLogs)
   const todayPlan = plan?.days?.find((d: any) => d.day === dayName) || plan?.days?.[0]
@@ -162,6 +167,22 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+
+        {/* Calories burned today (cardio) */}
+        <div className="p-4 rounded-2xl flex items-center justify-between" style={{ background: '#0f0f1a', border: '1px solid #1c1c2e' }}>
+          <div>
+            <div className="text-xs uppercase tracking-widest font-semibold" style={{ color: '#b4b4c8' }}>🔥 Burned today</div>
+            <div className="text-2xl font-bold mt-1" style={{ color: '#f97316' }}>{cardioBurned} kcal</div>
+            <div className="text-sm mt-0.5" style={{ color: '#b4b4c8' }}>
+              {todayCardio.length ? `${todayCardio.length} cardio · ${cardioMinutes} min` : 'No cardio logged yet'}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-xs uppercase tracking-widest font-semibold" style={{ color: '#b4b4c8' }}>Net</div>
+            <div className="text-2xl font-bold mt-1" style={{ color: '#f0f0f0' }}>{todayCalories - cardioBurned}</div>
+            <div className="text-sm mt-0.5" style={{ color: '#b4b4c8' }}>eaten − burned</div>
+          </div>
+        </div>
 
         {/* Muscle heatmap */}
         <div className="p-4 rounded-2xl" style={{ background: '#0f0f1a', border: '1px solid #1c1c2e' }}>
