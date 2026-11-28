@@ -5,7 +5,7 @@ import { getServiceClient } from '@/lib/supabase'
 import { SESSION_TYPES, youtubeId } from '@/lib/cardio'
 
 // Home-session video catalog: built-in rows (user_id null) + the user's own videos.
-const DEFAULT_MET: Record<string, number> = { hiit: 8, core: 4.5, yoga: 2.8, mobility: 2.5, stretch: 2.3, walk: 4.5 }
+const DEFAULT_MET: Record<string, number> = { hiit: 8, core: 4.5, yoga: 2.8, mobility: 2.5, stretch: 2.3, walk: 4.5, warmup: 3.5, cooldown: 2.3 }
 const LEVEL_MET: Record<string, number> = { beginner: 0.8, intermediate: 1, advanced: 1.12 }
 
 async function userIdOf() {

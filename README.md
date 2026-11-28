@@ -5,7 +5,7 @@
 - **Supabase** (Postgres DB + Auth)
 - **Google OAuth** (via NextAuth.js)
 - **Groq** (LLaMA 3.3 70B — workout plan generation + macro estimation)
-- **Gemini 1.5 Flash** (food photo scanning)
+- **NVIDIA Nemotron VL** (food, cardio-screen and machine photo scans)
 - **Vercel** (free hosting)
 
 ## Features
@@ -13,7 +13,7 @@
 - 🏋️ Exercise logging: sets, reps, weight, RPE
 - ⏱️ Rest timer between sets
 - 🏆 Automatic PR detection
-- 🍽️ Food logger: AI text description, photo scan (Gemini), manual entry
+- 🍽️ Food logger: AI text description, photo scan (NVIDIA), manual entry
 - 📊 Macro tracking (calories, protein, carbs, fat) with targets
 - 📈 Progress charts (weight, workout volume)
 - 💪 Body measurements tracker
@@ -51,9 +51,11 @@ npm install
 1. Go to [console.groq.com](https://console.groq.com)
 2. Create account → API Keys → Create key
 
-**Gemini** (free tier):
-1. Go to [aistudio.google.com](https://aistudio.google.com)
-2. Get API key (free with Google account)
+**NVIDIA** (free, photo scans):
+1. Go to [build.nvidia.com](https://build.nvidia.com)
+2. Sign in → Get API Key
+
+Models and fallback order for every AI task live in `config/llm.yaml`.
 
 ### 5. Configure Environment
 
@@ -74,7 +76,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=xxx
 SUPABASE_SERVICE_ROLE_KEY=xxx
 
 GROQ_API_KEY=gsk_xxx
-GEMINI_API_KEY=AIzaxxx
+NVIDIA_API_KEY=nvapi-xxx
 ```
 
 ### 6. Run Locally
@@ -119,7 +121,7 @@ https://your-app.vercel.app/api/auth/callback/google
 | Service | Free Limit |
 |---------|-----------|
 | Groq | 30 req/min, 6000 req/day |
-| Gemini Flash | 15 req/min, 1500 req/day |
+| NVIDIA NIM | free developer tier (rate-limited) |
 | Supabase | 500MB DB, 2GB bandwidth |
 | Vercel | Unlimited personal projects |
 

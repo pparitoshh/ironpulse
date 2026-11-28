@@ -1,5 +1,6 @@
 'use client'
 import { clock, summarize, WSet } from '@/lib/strength'
+import WarmCoolCard from '@/components/WarmCoolCard'
 
 type Props = {
   dayName: string
@@ -71,6 +72,8 @@ export default function WorkoutSummary({ dayName, startedAt, endedAt, minutes, s
         <p className="text-xs mt-4" style={{ color: '#9a9ab0' }}>
           Lifting calories are an estimate: METs from your set effort (RPE) × your body weight × time.
         </p>
+
+        <WarmCoolCard kind="cooldown" />
 
         <button onClick={onClose} className="w-full mt-6 py-4 rounded-2xl font-bold text-base active:scale-95 transition-all"
           style={{ background: '#f97316', color: '#fff' }}>Done</button>

@@ -69,3 +69,9 @@ insert into ironpulse.session_catalog (user_id,type,title,channel,youtube_id,dur
 (null,'yoga','30 min Yin Yoga for Upper Back Knots - Beginner Yin for Upper Body Pain','Yoga with Kassandra','94hMk05dTws',32,'beginner',2.0,'none',true,true),
 (null,'yoga','35 min Morning Yoga to STRETCH & ENERGIZE','Yoga with Kassandra','ZgHo2xL3vX0',38,'intermediate',3.0,'none',true,true)
 on conflict do nothing;
+
+-- User's chosen warm-up and cool-down videos
+insert into ironpulse.session_catalog (user_id,type,title,channel,youtube_id,duration_min,level,met,equipment,low_impact,embeddable) values
+(null,'warmup','5-minute PRE-WORKOUT WARM UP for Injury Prevention','Kaleigh Cohen Strength','OcPs3x1vX1A',7,'beginner',3.5,'none',true,true),
+(null,'cooldown','5 MIN FULL BODY COOL DOWN STRETCHES (Recovery & Flexibility)','MadFit','gfzC9XMEypg',7,'beginner',2.3,'none',true,true)
+on conflict do nothing;

@@ -13,10 +13,7 @@ providers:
   nvidia:
     base_url: https://integrate.api.nvidia.com/v1
     key_env: NVIDIA_API_KEY
-  gemini:   # Google AI Studio free tier, OpenAI-compatible endpoint
-    base_url: https://generativelanguage.googleapis.com/v1beta/openai
-    key_env: GEMINI_API_KEY
-  # mistral: free tier ended Nov 2026 (402 "You need a subscription") — removed from all chains.
+  # Only NVIDIA + Groq free tiers are allowed (user rule). Mistral's free tier ended; Gemini not used.
 
 tasks:
   # ---- text ----
@@ -33,17 +30,16 @@ tasks:
     - { provider: groq, model: openai/gpt-oss-20b, max_tokens: 2000, timeout_s: 15, json_mode: true, reasoning_effort: low, temperature: 0.1 }
 
   # ---- vision (photo scans) ----
-  # Gemini flash-lite reads plates and console screens in ~2 s. NVIDIA super-VL (~4-13 s) is the backup,
-  # the omni reasoning model (~30 s) the last resort.
+  # Groq has no vision model, so photos go to NVIDIA: super-VL with thinking off (~3-7 s) first,
+  # the omni reasoning model (~30 s) as backup. Without `thinking: false` super-VL burns max_tokens and replies empty.
   food_photo:
-    - { provider: gemini, model: gemini-flash-lite-latest, max_tokens: 2500, timeout_s: 25, json_mode: true, temperature: 0.1 }
-    - { provider: nvidia, model: nvidia/nemotron-3.5-super-vl-120b-a12b, max_tokens: 3000, timeout_s: 35, temperature: 0.1 }
+    - { provider: nvidia, model: nvidia/nemotron-3.5-super-vl-120b-a12b, thinking: false, max_tokens: 2500, timeout_s: 35, temperature: 0.1 }
     - { provider: nvidia, model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning, max_tokens: 5000, timeout_s: 50, temperature: 0.1 }
 
   cardio_photo:   # machine summary screen -> cardio log
-    - { provider: gemini, model: gemini-flash-lite-latest, max_tokens: 1500, timeout_s: 20, json_mode: true, temperature: 0.1 }
-    - { provider: nvidia, model: nvidia/nemotron-3.5-super-vl-120b-a12b, max_tokens: 2000, timeout_s: 30, temperature: 0.1 }
+    - { provider: nvidia, model: nvidia/nemotron-3.5-super-vl-120b-a12b, thinking: false, max_tokens: 1500, timeout_s: 30, temperature: 0.1 }
+    - { provider: nvidia, model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning, max_tokens: 5000, timeout_s: 50, temperature: 0.1 }
 
   machine_photo:   # instruction placard -> exercise
-    - { provider: gemini, model: gemini-flash-lite-latest, max_tokens: 1000, timeout_s: 20, json_mode: true, temperature: 0.1 }
-    - { provider: nvidia, model: nvidia/nemotron-3.5-super-vl-120b-a12b, max_tokens: 2000, timeout_s: 30, temperature: 0.1 }
+    - { provider: nvidia, model: nvidia/nemotron-3.5-super-vl-120b-a12b, thinking: false, max_tokens: 1500, timeout_s: 30, temperature: 0.1 }
+    - { provider: nvidia, model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning, max_tokens: 4000, timeout_s: 50, temperature: 0.1 }

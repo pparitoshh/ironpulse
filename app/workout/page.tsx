@@ -8,6 +8,7 @@ import { localDate } from '@/lib/date'
 import CardioCard from '@/components/CardioCard'
 import HomeDayCard from '@/components/HomeDayCard'
 import WorkoutSummary from '@/components/WorkoutSummary'
+import WarmCoolCard from '@/components/WarmCoolCard'
 import { clock, minutesBetween } from '@/lib/strength'
 
 async function fetchOverloadSuggestion(exerciseName: string, sets: {weight_kg: number, reps: number}[]) {
@@ -459,7 +460,9 @@ export default function WorkoutPage() {
               style={{ background: '#22c55e', color: '#fff', boxShadow: '0 4px 0 #15803d' }}>
               ▶ Start workout
             </button>
-          ) : !endedAt ? (
+          ) : null}
+          {!startedAt && <WarmCoolCard kind="warmup" />}
+          {!startedAt ? null : !endedAt ? (
             <div className="rounded-2xl p-4 flex items-center justify-between"
               style={{ background: 'rgba(34,197,94,0.12)', border: '2px solid #22c55e' }}>
               <div>
@@ -480,6 +483,7 @@ export default function WorkoutPage() {
               <div className="text-sm mt-0.5" style={{ color: '#b4b4c8' }}>Tap for summary</div>
             </button>
           )}
+          {endedAt && <WarmCoolCard kind="cooldown" />}
         </div>
       )}
 

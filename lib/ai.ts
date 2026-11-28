@@ -13,6 +13,8 @@ type Step = {
   json_mode?: boolean
   reasoning_effort?: string
   temperature?: number
+  /** NVIDIA nemotron VL/omni: false skips the hidden reasoning (otherwise it eats max_tokens and replies empty). */
+  thinking?: boolean
 }
 type LLMConfig = { providers: Record<string, Provider>; tasks: Record<string, Step[]> }
 
@@ -59,6 +61,7 @@ async function callStep(step: Step, content: any): Promise<string> {
   }
   if (step.json_mode) body.response_format = { type: 'json_object' }
   if (step.reasoning_effort) body.reasoning_effort = step.reasoning_effort
+  if (step.thinking === false) body.chat_template_kwargs = { enable_thinking: false }
 
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), (step.timeout_s ?? 30) * 1000)

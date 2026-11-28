@@ -20,6 +20,8 @@ export const SESSION_TYPES = [
   { value: 'mobility', label: 'Mobility', icon: '🤸' },
   { value: 'stretch', label: 'Stretch', icon: '🙆' },
   { value: 'walk', label: 'Walk', icon: '🚶' },
+  { value: 'warmup', label: 'Warm-up', icon: '🔥' },
+  { value: 'cooldown', label: 'Cool-down', icon: '❄️' },
 ] as const
 
 export type SessionType = typeof SESSION_TYPES[number]['value']

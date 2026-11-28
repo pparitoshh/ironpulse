@@ -69,7 +69,7 @@ export default function Home() {
         </button>
 
         <p className="mt-4 text-xs" style={{ color: '#444' }}>
-          Free to use · Powered by Groq + Gemini
+          Free to use · Powered by Groq + NVIDIA
         </p>
       </div>
     </main>
