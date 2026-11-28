@@ -117,19 +117,40 @@ export default function WorkoutPage() {
 
   // Auto-save sets after changes (debounced 1.5s)
   const setsLoaded = useRef(false)
+  const [savedOk, setSavedOk] = useState<boolean | null>(null)
+  const pendingRef = useRef<any[] | null>(null)
   useEffect(() => {
     // Skip until today's log has loaded, so we never overwrite it with an empty session.
     if (!setsLoaded.current) return
     if (sets.length === 0) return
     if (autoSaveRef.current) clearTimeout(autoSaveRef.current)
+    pendingRef.current = sets
     autoSaveRef.current = setTimeout(async () => {
+      autoSaveRef.current = null
+      pendingRef.current = null
       setAutoSaving(true)
       const res = await postLog(sets, timingRef.current.startedAt, timingRef.current.endedAt)
       if (res?.calories != null) setSessionKcal(res.calories)
+      setSavedOk(!!res)
       setAutoSaving(false)
     }, 1500)
-    return () => { if (autoSaveRef.current) clearTimeout(autoSaveRef.current) }
   }, [sets])
+
+  // If the app is closed/backgrounded inside the 1.5 s debounce, send the pending sets right away
+  // (keepalive lets the request finish after the page is gone).
+  useEffect(() => {
+    const flush = () => {
+      if (!pendingRef.current) return
+      if (autoSaveRef.current) { clearTimeout(autoSaveRef.current); autoSaveRef.current = null }
+      const pending = pendingRef.current
+      pendingRef.current = null
+      postLog(pending, timingRef.current.startedAt, timingRef.current.endedAt, true)
+    }
+    const onVis = () => { if (document.visibilityState === 'hidden') flush() }
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('pagehide', flush)
+    return () => { document.removeEventListener('visibilitychange', onVis); window.removeEventListener('pagehide', flush) }
+  })
 
   // Live elapsed clock while a session is running.
   useEffect(() => {
@@ -138,9 +159,10 @@ export default function WorkoutPage() {
     return () => clearInterval(iv)
   }, [startedAt, endedAt])
 
-  async function postLog(currentSets: any[], started: string | null, ended: string | null) {
+  async function postLog(currentSets: any[], started: string | null, ended: string | null, keepalive = false) {
     const res = await fetch('/api/log-workout', {
       method: 'POST',
+      keepalive,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         date: today,
@@ -469,6 +491,12 @@ export default function WorkoutPage() {
                 <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
                 Saving...
               </span>
+            )}
+            {!autoSaving && savedOk === true && (
+              <span className="text-xs font-bold" style={{ color: '#4ade80' }}>✓ Saved</span>
+            )}
+            {!autoSaving && savedOk === false && (
+              <span className="text-xs font-bold" style={{ color: '#f87171' }}>⚠ Not saved, check connection</span>
             )}
           </div>
           <h1 className="font-bold text-2xl">{selectedDay?.name || 'Workout'}</h1>
@@ -854,10 +882,12 @@ export default function WorkoutPage() {
                           className="text-sm font-semibold text-left truncate" style={{ color: prev ? '#b4b4c8' : '#6b6b80' }}>
                           {prev ? `${prev.weight_kg} kg × ${prev.reps}` : '—'}
                         </button>
-                        <input type="number" inputMode="decimal" value={s.weight_kg} min={0} step={0.5}
+                        <input type="number" inputMode="decimal" value={s.weight_kg || ''} placeholder="0" min={0} step={0.5}
+                          onFocus={e => e.target.select()}
                           onChange={e => updateSet(globalIdx, 'weight_kg', parseFloat(e.target.value) || 0)}
                           className="rounded-lg px-1 py-2 text-base font-bold text-center w-full outline-none" style={inputStyle} />
-                        <input type="number" inputMode="numeric" value={s.reps} min={1} max={100}
+                        <input type="number" inputMode="numeric" value={s.reps || ''} placeholder="0" min={1} max={100}
+                          onFocus={e => e.target.select()}
                           onChange={e => updateSet(globalIdx, 'reps', parseInt(e.target.value) || 0)}
                           className="rounded-lg px-1 py-2 text-base font-bold text-center w-full outline-none" style={inputStyle} />
                         <button onClick={() => updateSet(globalIdx, 'rpe', (s.rpe || 7) >= 10 ? 5 : (s.rpe || 7) + 1)}
