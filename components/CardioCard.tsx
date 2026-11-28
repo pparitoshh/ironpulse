@@ -77,6 +77,7 @@ function NumField({
       <input
         inputMode="decimal"
         value={value}
+        onFocus={e => { const el = e.currentTarget; setTimeout(() => el.select(), 0) }}
         onChange={e => onChange(e.target.value)}
         required={required}
         className="rounded-xl px-3 py-2.5 font-semibold outline-none w-full"

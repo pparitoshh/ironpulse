@@ -10,6 +10,7 @@ import HomeDayCard from '@/components/HomeDayCard'
 import WorkoutSummary from '@/components/WorkoutSummary'
 import WarmCoolCard from '@/components/WarmCoolCard'
 import { insertIndex, sortExercises } from '@/lib/exerciseOrder'
+import NumInput from '@/components/NumInput'
 import { clock, minutesBetween } from '@/lib/strength'
 
 async function fetchOverloadSuggestion(exerciseName: string, sets: {weight_kg: number, reps: number}[]) {
@@ -800,8 +801,7 @@ export default function WorkoutPage() {
                       </div>
                       <div>
                         <label className="text-xs block mb-0.5" style={{ color: '#9a9ab0' }}>Sets</label>
-                        <input type="number" value={exercise.sets} min={1} max={20}
-                          onChange={e => updateExerciseField(exercise.id, 'sets', parseInt(e.target.value) || 1)}
+                        <NumInput decimals={false} value={exercise.sets} onChange={n => updateExerciseField(exercise.id, 'sets', Math.min(n, 20) || 1)}
                           onBlur={saveExerciseEdits}
                           className="w-full rounded-lg px-2 py-1.5 text-xs text-center outline-none"
                           style={{ background: '#14141f', border: '1px solid #1c1c2e', color: '#f0f0f0' }} />
@@ -816,8 +816,7 @@ export default function WorkoutPage() {
                       </div>
                       <div>
                         <label className="text-xs block mb-0.5" style={{ color: '#9a9ab0' }}>Rest(s)</label>
-                        <input type="number" value={exercise.rest_seconds} min={0} step={15}
-                          onChange={e => updateExerciseField(exercise.id, 'rest_seconds', parseInt(e.target.value) || 0)}
+                        <NumInput decimals={false} value={exercise.rest_seconds} onChange={n => updateExerciseField(exercise.id, 'rest_seconds', n)}
                           onBlur={saveExerciseEdits}
                           className="w-full rounded-lg px-2 py-1.5 text-xs text-center outline-none"
                           style={{ background: '#14141f', border: '1px solid #1c1c2e', color: '#f0f0f0' }} />
@@ -882,13 +881,9 @@ export default function WorkoutPage() {
                           className="text-sm font-semibold text-left truncate" style={{ color: prev ? '#b4b4c8' : '#6b6b80' }}>
                           {prev ? `${prev.weight_kg} kg × ${prev.reps}` : '—'}
                         </button>
-                        <input type="number" inputMode="decimal" value={s.weight_kg || ''} placeholder="0" min={0} step={0.5}
-                          onFocus={e => e.target.select()}
-                          onChange={e => updateSet(globalIdx, 'weight_kg', parseFloat(e.target.value) || 0)}
+                        <NumInput value={s.weight_kg} onChange={n => updateSet(globalIdx, 'weight_kg', n)}
                           className="rounded-lg px-1 py-2 text-base font-bold text-center w-full outline-none" style={inputStyle} />
-                        <input type="number" inputMode="numeric" value={s.reps || ''} placeholder="0" min={1} max={100}
-                          onFocus={e => e.target.select()}
-                          onChange={e => updateSet(globalIdx, 'reps', parseInt(e.target.value) || 0)}
+                        <NumInput decimals={false} value={s.reps} onChange={n => updateSet(globalIdx, 'reps', Math.min(n, 100))}
                           className="rounded-lg px-1 py-2 text-base font-bold text-center w-full outline-none" style={inputStyle} />
                         <button onClick={() => updateSet(globalIdx, 'rpe', (s.rpe || 7) >= 10 ? 5 : (s.rpe || 7) + 1)}
                           title="Effort 1-10 (tap to change)"
@@ -982,8 +977,7 @@ export default function WorkoutPage() {
             <div className="grid grid-cols-3 gap-2">
               <div>
                 <label className="text-xs block mb-0.5" style={{ color: '#9a9ab0' }}>Sets</label>
-                <input type="number" value={newExercise.sets} min={1}
-                  onChange={e => setNewExercise(prev => ({ ...prev, sets: parseInt(e.target.value) || 1 }))}
+                <NumInput decimals={false} value={newExercise.sets} onChange={n => setNewExercise(prev => ({ ...prev, sets: n || 1 }))}
                   className="w-full rounded-lg px-2 py-2 text-sm text-center outline-none"
                   style={{ background: '#14141f', border: '1px solid #1c1c2e', color: '#f0f0f0' }} />
               </div>
@@ -996,8 +990,7 @@ export default function WorkoutPage() {
               </div>
               <div>
                 <label className="text-xs block mb-0.5" style={{ color: '#9a9ab0' }}>Rest (s)</label>
-                <input type="number" value={newExercise.rest_seconds} min={0} step={15}
-                  onChange={e => setNewExercise(prev => ({ ...prev, rest_seconds: parseInt(e.target.value) || 0 }))}
+                <NumInput decimals={false} value={newExercise.rest_seconds} onChange={n => setNewExercise(prev => ({ ...prev, rest_seconds: n }))}
                   className="w-full rounded-lg px-2 py-2 text-sm text-center outline-none"
                   style={{ background: '#14141f', border: '1px solid #1c1c2e', color: '#f0f0f0' }} />
               </div>

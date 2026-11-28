@@ -4,6 +4,7 @@ import type { ChangeEvent, CSSProperties, ReactNode } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { BottomNav } from '@/components/ui/BottomNav'
+import NumInput from '@/components/NumInput'
 import { localDate } from '@/lib/date'
 import { mealTotals, scaleItem } from '@/lib/food'
 import type { FoodItem, Meal } from '@/lib/food'
@@ -156,48 +157,6 @@ function Spinner({ color = '#f97316' }: { color?: string }) {
   )
 }
 
-function NumInput({
-  value,
-  onChange,
-  className,
-  style,
-  placeholder,
-}: {
-  value: number
-  onChange: (n: number) => void
-  className?: string
-  style?: CSSProperties
-  placeholder?: string
-}) {
-  const [text, setText] = useState(inputNum(value))
-  const lastValue = useRef(value)
-
-  useEffect(() => {
-    if (lastValue.current === value) return
-    lastValue.current = value
-    const parsed = parseFloat(text.replace(',', '.'))
-    if (!Number.isFinite(parsed) || Math.abs(parsed - value) > 1e-9) {
-      setText(inputNum(value))
-    }
-  }, [value, text])
-
-  return (
-    <input
-      inputMode="decimal"
-      value={text}
-      placeholder={placeholder}
-      onChange={e => {
-        const raw = e.target.value
-        setText(raw)
-        const n = parseFloat(raw.replace(',', '.'))
-        if (Number.isFinite(n) && n >= 0) onChange(n)
-      }}
-      className={className}
-      style={style}
-    />
-  )
-}
-
 function MiniNum({
   label,
   value,
@@ -246,6 +205,7 @@ function TextField({
       <input
         inputMode={decimal ? 'decimal' : 'text'}
         value={value}
+        onFocus={decimal ? e => { const el = e.currentTarget; setTimeout(() => el.select(), 0) } : undefined}
         placeholder={placeholder}
         onChange={e => onChange(e.target.value)}
         className="w-full rounded-xl px-3 py-2.5 font-semibold outline-none"
@@ -1430,6 +1390,7 @@ export default function FoodPage() {
                   <input
                     inputMode="decimal"
                     value={edit.grams}
+                    onFocus={e => { const el = e.currentTarget; setTimeout(() => el.select(), 0) }}
                     onChange={e => onEditGrams(e.target.value)}
                     className="w-24 rounded-xl px-3 py-2.5 text-center font-semibold outline-none"
                     style={INPUT}
