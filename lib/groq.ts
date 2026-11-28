@@ -1,4 +1,5 @@
 import { askJSON } from './ai'
+import { sortExercises } from './exerciseOrder'
 import { foodTextPrompt, normalizeMeal } from './food'
 
 export async function generateWorkoutPlan(profile: {
@@ -29,6 +30,9 @@ Rules:
 - Distribute muscle groups appropriately across days
 - 3 days = full body, 4 days = upper/lower, 5-6 days = PPL
 
+- muscle_group must be one of: chest, back, shoulders, biceps, triceps, forearms, abs, quads, hamstrings, glutes, calves, cardio (the PRIMARY muscle)
+- movement: "compound" for multi-joint lifts (squat, press, row, pull-up, deadlift, lunge), "isolation" for single-joint ones (curl, raise, fly, extension)
+
 Return ONLY valid JSON in this exact format:
 {
   "days": [
@@ -41,6 +45,7 @@ Return ONLY valid JSON in this exact format:
           "id": "ex1",
           "name": "Barbell Bench Press",
           "muscle_group": "chest",
+          "movement": "compound",
           "sets": 4,
           "reps": "8-10",
           "rest_seconds": 90,
@@ -59,10 +64,11 @@ Return ONLY valid JSON in this exact format:
   let counter = 0
   parsed.days = (parsed.days ?? []).map((day: any) => ({
     ...day,
-    exercises: (day.exercises ?? []).map((ex: any) => ({
+    // Body-structure order: big regions first, compound before isolation, regions grouped.
+    exercises: sortExercises((day.exercises ?? []).map((ex: any) => ({
       ...ex,
       id: `ex_${++counter}_${(ex.name || 'exercise').toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 20)}`,
-    })),
+    }))),
   }))
 
   return parsed
