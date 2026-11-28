@@ -11,6 +11,8 @@ import WorkoutSummary from '@/components/WorkoutSummary'
 import WarmCoolCard from '@/components/WarmCoolCard'
 import { insertIndex, sortExercises } from '@/lib/exerciseOrder'
 import NumInput from '@/components/NumInput'
+import MachineScanButton from '@/components/MachineScanButton'
+import { sameExercise, type MachineScan } from '@/lib/machine'
 import { clock, minutesBetween } from '@/lib/strength'
 
 async function fetchOverloadSuggestion(exerciseName: string, sets: {weight_kg: number, reps: number}[]) {
@@ -91,6 +93,9 @@ export default function WorkoutPage() {
     name: '', muscle_group: 'chest', sets: 3, reps: '10', rest_seconds: 90, equipment: '', notes: '', youtube_url: ''
   })
   const [trainingDays, setTrainingDays] = useState<string[] | null>(null)
+  // Last machine scan: tips + confidence shown above the prefilled form
+  const [scanInfo, setScanInfo] = useState<MachineScan | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   const today = localDate()
   const dayName = new Date().toLocaleDateString('en-US', { weekday: 'long' })
@@ -358,6 +363,24 @@ export default function WorkoutPage() {
     savePlanToServer(updatedPlan)
   }
 
+  /** Machine photo read: if it's already in today's plan jump to it, else prefill the add form. */
+  function onMachineScanned(ex: MachineScan) {
+    const existing = selectedDay?.exercises?.find((e: any) => sameExercise(e.name, ex.name))
+    if (existing) {
+      setNotice(`${existing.name} is already in ${selectedDay.name}. Scrolled to it.`)
+      setTimeout(() => document.getElementById(`ex-${existing.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
+      setTimeout(() => setNotice(null), 4000)
+      return
+    }
+    setNewExercise({
+      name: ex.name, muscle_group: ex.muscle_group, sets: ex.sets, reps: ex.reps, rest_seconds: ex.rest_seconds,
+      equipment: ex.equipment, notes: ex.tips.join(' · '), youtube_url: ex.youtube_url,
+    })
+    setScanInfo(ex)
+    setShowAddExercise(true)
+    setTimeout(() => document.getElementById('add-exercise-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
+  }
+
   function addExercise() {
     if (!plan || !selectedDay || !newExercise.name.trim()) return
     const id = `ex_custom_${Date.now()}_${newExercise.name.toLowerCase().replace(/\s+/g, '_')}`
@@ -373,8 +396,12 @@ export default function WorkoutPage() {
     setPlan(updatedPlan)
     setSelectedDay(updatedDays.find((d: any) => d.day === selectedDay.day))
     setShowAddExercise(false)
+    setScanInfo(null)
     setNewExercise({ name: '', muscle_group: 'chest', sets: 3, reps: '10', rest_seconds: 90, equipment: '', notes: '', youtube_url: '' })
     savePlanToServer(updatedPlan)
+    setNotice(`${exercise.name} added to ${selectedDay.name}`)
+    setTimeout(() => document.getElementById(`ex-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80)
+    setTimeout(() => setNotice(null), 3500)
   }
 
   function updateExerciseField(exerciseId: string, field: string, value: any) {
@@ -703,7 +730,7 @@ export default function WorkoutPage() {
           const hasPR = exSets.some(s => s.is_pr)
 
           return (
-            <div key={exercise.id} className="rounded-2xl overflow-hidden"
+            <div key={exercise.id} id={`ex-${exercise.id}`} className="rounded-2xl overflow-hidden scroll-mt-24"
               style={{ background: '#0f0f1a', border: `1px solid ${isActive ? '#f97316' : '#1c1c2e'}` }}>
               {/* Exercise header */}
               <div className="px-4 pt-3 pb-2">
@@ -733,6 +760,9 @@ export default function WorkoutPage() {
                           {exercise.sets}×{exercise.reps} · {exercise.rest_seconds}s rest
                         </span>
                       </div>
+                    )}
+                    {!editMode && exercise.notes && (
+                      <p className="text-xs mt-1.5 leading-snug" style={{ color: '#b4b4c8' }}>💡 {exercise.notes}</p>
                     )}
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
@@ -924,18 +954,43 @@ export default function WorkoutPage() {
         )}
 
         {/* Add Exercise (edit mode) */}
-        {editMode && selectedDay && !showAddExercise && (
-          <button onClick={() => setShowAddExercise(true)}
-            className="w-full py-3 rounded-2xl text-sm font-medium transition-all"
-            style={{ background: 'rgba(249,115,22,0.08)', color: '#f97316', border: '1px dashed rgba(249,115,22,0.3)' }}>
-            + Add Exercise
-          </button>
+        {notice && (
+          <div className="rounded-2xl px-4 py-3 text-sm font-bold" style={{ background: 'rgba(34,197,94,0.14)', border: '1px solid #22c55e', color: '#86efac' }}>
+            ✓ {notice}
+          </div>
         )}
 
-        {/* Add Exercise Form */}
-        {editMode && showAddExercise && (
-          <div className="rounded-2xl p-4 space-y-3" style={{ background: '#0f0f1a', border: '1px solid #f97316' }}>
-            <p className="text-xs uppercase tracking-widest" style={{ color: '#f97316' }}>New Exercise</p>
+        {/* Add an exercise: snap the machine's sign (gym) or type it */}
+        {selectedDay && !showAddExercise && (
+          <div className="rounded-2xl p-3 space-y-2" style={{ background: '#0f0f1a', border: '1px dashed rgba(249,115,22,0.45)' }}>
+            <MachineScanButton onResult={onMachineScanned} />
+            <button onClick={() => { setScanInfo(null); setShowAddExercise(true) }}
+              className="w-full py-2.5 rounded-xl text-sm font-bold transition-all"
+              style={{ background: 'transparent', color: '#fb923c' }}>
+              + Type an exercise instead
+            </button>
+          </div>
+        )}
+
+        {showAddExercise && (
+          <div id="add-exercise-form" className="rounded-2xl p-4 space-y-3" style={{ background: '#0f0f1a', border: '1px solid #f97316' }}>
+            <p className="text-xs uppercase tracking-widest font-bold" style={{ color: '#f97316' }}>
+              {scanInfo ? '📷 From your photo, check and add' : 'New Exercise'}
+            </p>
+            {scanInfo && (
+              <div className="rounded-xl p-3 text-sm space-y-1" style={{ background: '#14141f', color: '#e4e4f0' }}>
+                {scanInfo.printed_name && <div style={{ color: '#b4b4c8' }}>Sign says: <b style={{ color: '#f0f0f0' }}>{scanInfo.printed_name}</b></div>}
+                <div style={{ color: '#b4b4c8' }}>
+                  Works: <b style={{ color: '#f0f0f0' }} className="capitalize">{[scanInfo.muscle_group, ...scanInfo.secondary].join(', ')}</b> · {scanInfo.movement}
+                  {scanInfo.confidence === 'low' && <span style={{ color: '#fbbf24' }}> · not sure, please check the name</span>}
+                </div>
+                {scanInfo.tips.length > 0 && (
+                  <ul className="list-disc pl-5 pt-1 space-y-0.5">
+                    {scanInfo.tips.map((t, i) => <li key={i}>{t}</li>)}
+                  </ul>
+                )}
+              </div>
+            )}
             <input
               type="text"
               placeholder="Exercise name"
@@ -1002,7 +1057,7 @@ export default function WorkoutPage() {
                 style={{ background: '#f97316', color: '#fff' }}>
                 Add
               </button>
-              <button onClick={() => setShowAddExercise(false)}
+              <button onClick={() => { setShowAddExercise(false); setScanInfo(null) }}
                 className="px-4 py-2.5 rounded-xl text-sm"
                 style={{ background: '#14141f', color: '#b4b4c8' }}>
                 Cancel
