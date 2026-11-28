@@ -9,6 +9,23 @@ export default function PWA() {
   const [deferred, setDeferred] = useState<any>(null)
   const [iosHint, setIosHint] = useState(false)
 
+  // Videos: when a YouTube player goes full screen, turn the phone sideways (landscape);
+  // back to normal when it exits. Android Chrome only allows this lock while in full screen.
+  useEffect(() => {
+    const onFs = () => {
+      const o: any = (screen as any).orientation
+      if (!o?.lock) return
+      const el = document.fullscreenElement
+      if (el && (el.tagName === 'IFRAME' || el.tagName === 'VIDEO' || el.querySelector?.('iframe,video'))) {
+        o.lock('landscape').catch(() => {})
+      } else if (!el) {
+        try { o.unlock() } catch {}
+      }
+    }
+    document.addEventListener('fullscreenchange', onFs)
+    return () => document.removeEventListener('fullscreenchange', onFs)
+  }, [])
+
   useEffect(() => {
     if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
       navigator.serviceWorker.register('/sw.js').catch(() => {})
